@@ -95,7 +95,7 @@ export default function Home() {
         </div>
       </nav>
 
-      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-8">
+      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-8 max-sm:py-3">
         <Link href="/" className="inline-block mb-4">
           <Button variant="ghost">
             <ArrowLeft className="w-4 h-4 mr-2" />

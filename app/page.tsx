@@ -29,7 +29,7 @@ export default function Home() {
 
       <main className="flex-1 flex flex-col items-center justify-center px-4">
         <div className="space-y-4 text-center mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-normal sm:tracking-tight">
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-normal sm:tracking-tight lg:leading-12 lg:text-4xl">
             An Open-Source Community <br />
             for <br />
             BMSCE Students

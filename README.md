@@ -1,42 +1,74 @@
 # ClassPulse
 
-A minimal, professional web application for class CRs and lecturers to post quick questions and view student responses.
+A minimal, professional web application where anyone can create quick questions and collect student responses in real-time. Built for educational purposes to demonstrate modern full-stack web development practices.
+
+**⚠️ Educational Project**: This application is created primarily for learning and demonstrating web development concepts. While functional, it may not meet all production-grade requirements.
 
 ## Features
 
 ### 📝 Create Questions
 
-- Quick question creation with customizable settings
-- Choose between Yes/No or Short Answer format
-- Target specific audiences (All Students or CR Only)
-- Optional anonymous responses
-- Optional name requirement
-- Instant shareable link generation
+- **Open access**: Anyone can create questions without authentication
+- **Two question types**: Yes/No buttons or Short Answer text input
+- **Audience targeting**:
+  - **All Students**: Open to everyone with manual name entry
+  - **MCA 1st yr Sec B**: Limited to 58 registered students with USN lookup
+- **Anonymous responses**: Optional setting for sensitive questions
+- **Dual submission modes**: Students choose identified or anonymous submission
+- **Instant shareable links**: Each question gets a unique URL
+- **Clean form interface**: Built with shadcn/ui components
 
 ### 👨‍🎓 Student Response
 
-- Clean, intuitive interface for answering questions
-- Large, easy-to-tap Yes/No buttons
-- Short answer text input option
-- Optional name field
-- Success confirmation after submission
+- **Smart student selection**:
+  - For MCA Sec B: Searchable dropdown with 58 students (name, USN, section)
+  - For All Students: Manual name input field
+- **Large Yes/No buttons**: Easy-to-tap with visual feedback (green/red)
+- **Short answer input**: Clean text field with validation
+- **Anonymous option**: Submit without identity (when enabled)
+- **Loading states**: Custom spinner during submission
+- **Duplicate prevention**: Buttons disabled while processing
+- **Success confirmation**: Full-screen success message
+- **Mobile optimized**: Responsive design for all devices
 
 ### 📊 Dashboard
 
-- View all created questions
-- Click to see detailed responses
-- Response statistics at a glance
-- Export responses to CSV
-- Copy question links easily
+- **Question list view**: All questions with type, audience, and anonymous status
+- **Response statistics**:
+  - Yes/No: Count of Yes and No responses
+  - Short Answer: Total response count
+- **Detailed response table**:
+  - Student name, USN, answer, and timestamp
+  - Anonymous responses marked clearly
+  - Sortable and scrollable on all devices
+- **CSV export**: Download all responses with full details
+- **Open in new tab**: Share question links via external link button
+- **Navigation**: Easy back/forth between list and detail views
+- **Empty states**: Helpful messages for first-time users
 
 ## Tech Stack
 
-- **Next.js 15** (App Router)
-- **React 18**
-- **TypeScript**
-- **Tailwind CSS**
-- **shadcn/ui** components
-- **Lucide React** icons
+### Frontend
+
+- **Next.js 15** (App Router with Turbopack)
+- **React 19** with React Compiler for optimization
+- **TypeScript 5** for type safety
+- **Tailwind CSS 4** with custom design tokens
+- **shadcn/ui** (New York style) with Radix UI primitives
+- **Lucide React** for icons
+- **Sonner** for toast notifications
+
+### Backend & Database
+
+- **PostgreSQL** (Neon cloud hosting)
+- **Prisma ORM 7.1.0** with PostgreSQL adapter
+- **pg driver** for database connections
+- **Next.js API Routes** for RESTful endpoints
+
+### Deployment
+
+- **Vercel** for hosting with automatic CI/CD
+- **GitHub** for version control
 
 ## Getting Started
 
@@ -47,34 +79,64 @@ A minimal, professional web application for class CRs and lecturers to post quic
 
 ### Installation
 
-1. Clone the repository
+1. Clone the repository:
+
+```bash
+git clone https://github.com/sandeep5shetty/bmsce-tech.git
+cd bmsce-tech
+```
+
 2. Install dependencies:
 
 ```bash
 npm install
 ```
 
-3. Run the development server:
+3. Set up environment variables:
+
+Create a `.env` file:
+
+```env
+DATABASE_URL="postgresql://username:password@host:port/database?sslmode=require"
+```
+
+4. Set up the database:
+
+```bash
+# Generate Prisma Client
+npx prisma generate
+
+# Run migrations
+npx prisma migrate deploy
+
+# Seed with 58 MCA students (optional)
+npx tsx prisma/seed.ts
+```
+
+5. Run the development server:
 
 ```bash
 npm run dev
 ```
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser
+6. Open [http://localhost:3000](http://localhost:3000)
 
 ## Usage
 
 ### Creating a Question
 
 1. Navigate to the home page
-2. Fill in the question form:
+2. Click "Create Question"
+3. Fill in the question form:
    - Enter your question text
    - Select question type (Yes/No or Short Answer)
-   - Choose audience (All Students or CR Only)
-   - Toggle anonymous responses if needed
-   - Toggle name requirement if needed
-3. Click "Create Question"
-4. Copy the generated link and share with students
+   - Choose audience:
+     - **All Students**: Anyone can respond
+     - **MCA 1st yr B Sec**: Only registered students
+   - Toggle "Allow Anonymous Responses" if needed
+4. Click "Create Question"
+5. Copy the generated link from the dialog
+6. Share the link via WhatsApp, email, or any platform
 
 ### Answering a Question
 
@@ -97,40 +159,86 @@ npm run dev
 
 ```
 app/
-├── page.tsx              # Home page - Create Question
-├── q/[id]/page.tsx       # Student answer page
-├── dashboard/page.tsx    # Dashboard with response table
-├── layout.tsx            # Root layout with Toaster
-└── globals.css           # Global styles
+├── page.tsx                      # Landing page
+├── create/page.tsx               # Create question form
+├── q/[id]/page.tsx               # Student answer page
+├── dashboard/page.tsx            # Dashboard with responses
+├── privacy/page.tsx              # Privacy & about page
+├── layout.tsx                    # Root layout
+├── globals.css                   # Global styles
+└── api/
+    ├── questions/
+    │   ├── route.ts              # GET/POST questions
+    │   └── [id]/route.ts         # GET question by ID
+    ├── responses/route.ts        # POST responses
+    └── students/route.ts         # GET students with search
 
 components/
-└── ui/                   # shadcn/ui components
-    ├── button.tsx
-    ├── card.tsx
-    ├── dialog.tsx
-    ├── input.tsx
-    ├── label.tsx
-    ├── select.tsx
-    ├── switch.tsx
-    ├── table.tsx
-    └── sonner.tsx
+├── ui/                           # shadcn/ui components
+│   ├── button.tsx
+│   ├── card.tsx
+│   ├── command.tsx               # Search dropdown
+│   ├── dialog.tsx
+│   ├── input.tsx
+│   ├── label.tsx
+│   ├── popover.tsx
+│   ├── select.tsx
+│   ├── spinner.tsx               # Loading spinner
+│   ├── switch.tsx
+│   ├── table.tsx
+│   └── sonner.tsx
+├── student-selector.tsx          # Student dropdown
+└── footer.tsx                    # App footer
 
 lib/
-├── types.ts              # TypeScript interfaces
-├── store.ts              # In-memory data store
-└── utils.ts              # Utility functions
+├── types.ts                      # TypeScript types
+├── prisma.ts                     # Prisma client
+└── utils.ts                      # Utilities
+
+prisma/
+├── schema.prisma                 # Database schema
+├── seed.ts                       # Seed script
+└── migrations/                   # Migration files
 ```
 
-## Data Storage
+## Database Structure
 
-This is a demo application that uses **in-memory storage**. All data is stored in the browser session and will be lost when the page is refreshed or the browser is closed.
+This application uses **PostgreSQL** with **Prisma ORM** for data persistence.
 
-For production use, you would need to:
+### Models
 
-- Implement a backend API
-- Add a database (PostgreSQL, MongoDB, etc.)
-- Add authentication
-- Implement proper data persistence
+**Student**
+
+- `id` (String, PK) - Unique identifier
+- `name` (String) - Full name
+- `usn` (String, Unique) - University Serial Number
+- `section` (String) - Class section
+- `createdAt` (DateTime)
+
+**Question**
+
+- `id` (String, PK) - Unique identifier
+- `question` (String) - Question text
+- `type` (String) - "yes-no" or "short-answer"
+- `audience` (String) - "all" or "cr-only"
+- `isAnonymous` (Boolean) - Allow anonymous responses
+- `createdAt` (DateTime)
+
+**Response**
+
+- `id` (String, PK) - Unique identifier
+- `questionId` (String, FK) - References Question
+- `answer` (String) - Response text
+- `studentId` (String, FK, Optional) - References Student
+- `name` (String, Optional) - Manual name entry
+- `submittedAt` (DateTime)
+
+### Current Data
+
+- **58 MCA 1st year Section B students** pre-seeded
+- All data persisted in PostgreSQL (Neon)
+- Cascade deletion for questions/responses
+- Indexes on frequently queried fields
 
 ## Design Features
 
@@ -142,18 +250,69 @@ For production use, you would need to:
 - **Accessible components** from shadcn/ui
 - **Type-safe** with TypeScript throughout
 
-## Future Enhancements
+## Current Features ✅
 
-- Backend API integration
-- Database persistence
-- User authentication
-- Real-time response updates
-- Question scheduling
-- Response analytics and charts
-- Question templates
-- Bulk question creation
-- Email/SMS notifications
+- ✅ PostgreSQL database with Prisma ORM
+- ✅ RESTful API with Next.js Route Handlers
+- ✅ Student database (58 MCA students)
+- ✅ Audience targeting (All / Sec B)
+- ✅ Anonymous response option
+- ✅ CSV export functionality
+- ✅ Responsive design (mobile/desktop)
+- ✅ Loading states and error handling
+- ✅ Search functionality for students
+- ✅ Real-time dashboard updates
 
-## License
+## Potential Future Enhancements 🚀
+
+- 🔐 User authentication and authorization
+- 📊 Response analytics with charts
+- 📅 Question scheduling and expiration
+- 🔔 Real-time notifications (WebSockets)
+- 📧 Email/SMS integrations
+- 📝 Question templates library
+- 📤 Bulk question import/export
+- 👥 Multi-section management
+- 📱 Progressive Web App (PWA)
+- 🎨 Custom themes and branding
+
+## Educational Purpose 📚
+
+This project is developed primarily for educational purposes:
+
+- 🎓 Demonstrate modern full-stack development (Next.js, React, TypeScript)
+- 🗄️ Showcase database design with Prisma and PostgreSQL
+- 🎨 Illustrate responsive UI/UX with shadcn/ui
+- 🔌 Teach RESTful API development
+- 📖 Serve as a learning resource for students
+- 🛠️ Practice real-world application architecture
+
+While functional for classroom use, the primary goal is education and skill development.
+
+## Contributing 🤝
+
+Contributions are welcome! To contribute:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## License 📄
 
 MIT
+
+## Acknowledgments 🙏
+
+- [Next.js](https://nextjs.org/) and [React](https://react.dev/)
+- [shadcn/ui](https://ui.shadcn.com/) for components
+- [Prisma](https://www.prisma.io/) for database ORM
+- [Vercel](https://vercel.com/) for hosting
+- [Lucide](https://lucide.dev/) for icons
+
+## Contact 📧
+
+**Developer**: Sandeep Shetty  
+**Website**: [sandeepshetty.dev](https://sandeepshetty.dev)  
+**GitHub**: [github.com/sandeep5shetty/bmsce-tech](https://github.com/sandeep5shetty/bmsce-tech)
