@@ -14,8 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ClassPulse - Quick Class Questions",
+  title: "BMSCE.tech",
   description: "Create and manage quick questions for your class",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

@@ -111,7 +111,7 @@ export function StudentSelector({
             value={search}
             onValueChange={setSearch}
           />
-          <CommandList>
+          <CommandList className="max-h-[180px] overflow-y-auto">
             <CommandEmpty>No student found.</CommandEmpty>
             <CommandGroup>
               {students.map((student) => (

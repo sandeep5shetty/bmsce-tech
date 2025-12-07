@@ -15,6 +15,7 @@ import {
 import { Question, Response } from "@/lib/types";
 import { Download, ArrowLeft, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import Image from "next/image";
 
 export default function DashboardPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -92,10 +93,10 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
       <nav className="border-b bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            ClassPulse Dashboard
-          </h1>
+        <div className="max-w-7xl mx-auto p-0 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2">
+            <Image src="/logo.svg" alt="BMSCE.tech+" width={100} height={100} />
+          </Link>
           <Link href="/">
             <Button variant="outline">Create Question</Button>
           </Link>

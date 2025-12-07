@@ -10,6 +10,7 @@
 ### 1. Prepare Your Database
 
 Get a PostgreSQL connection string from your provider. It should look like:
+
 ```
 postgresql://username:password@host:port/database?sslmode=require
 ```
@@ -29,12 +30,14 @@ git push origin main
 1. Go to https://vercel.com/new
 2. Import your GitHub repository
 3. Configure project:
+
    - **Framework Preset**: Next.js
    - **Root Directory**: `./`
    - **Build Command**: `npm run build` (already configured in package.json)
    - **Output Directory**: `.next`
 
 4. Add Environment Variables:
+
    - Click "Environment Variables"
    - Add: `DATABASE_URL` = `your_postgresql_connection_string`
 
@@ -64,6 +67,7 @@ vercel --prod
 After deployment, you need to run migrations:
 
 #### Option 1: Using Vercel CLI
+
 ```bash
 # Set environment variable locally for migration
 export DATABASE_URL="your_connection_string"
@@ -73,6 +77,7 @@ npx prisma migrate deploy
 ```
 
 #### Option 2: Using your database provider's console
+
 Run the SQL from your migration files directly in your database console.
 
 ### 5. Seed the Database (Optional)
@@ -90,11 +95,13 @@ npx tsx prisma/seed.ts
 ### Environment Variables
 
 Make sure to set these in Vercel:
+
 - `DATABASE_URL` - Your PostgreSQL connection string
 
 ### Build Configuration
 
 The `package.json` already includes:
+
 - `postinstall`: Generates Prisma Client after install
 - `build`: Generates Prisma Client before building Next.js
 
@@ -109,14 +116,17 @@ For serverless deployments like Vercel, use connection pooling:
 ### Common Issues
 
 #### "Module '@prisma/client' has no exported member 'PrismaClient'"
+
 - Solution: Prisma Client wasn't generated. The `postinstall` script should handle this.
 
 #### "Can't reach database server"
+
 - Check your `DATABASE_URL` is correct
 - Ensure your database allows connections from Vercel IPs
 - For some providers, you may need to whitelist `0.0.0.0/0`
 
 #### "Too many connections"
+
 - Use connection pooling
 - Consider using Prisma Accelerate for connection pooling
 
@@ -143,6 +153,7 @@ Vercel will automatically redeploy on push.
 ## Rollback
 
 If something goes wrong:
+
 1. Go to Vercel dashboard
 2. Select your project
 3. Go to "Deployments"

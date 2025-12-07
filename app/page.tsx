@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { QuestionType, Audience } from "@/lib/types";
 import { Copy, Check } from "lucide-react";
+import Image from "next/image";
 
 export default function Home() {
   const [question, setQuestion] = useState("");
@@ -77,10 +78,10 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
       <nav className="border-b bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            ClassPulse
-          </h1>
+        <div className="max-w-6xl mx-auto p-0 flex items-center justify-between">
+          <Link href="/" className="flex items-center">
+            <Image src="/logo.svg" alt="BMSCE.tech+" width={100} height={100} />
+          </Link>
           <Link href="/dashboard">
             <Button variant="outline">Dashboard</Button>
           </Link>
