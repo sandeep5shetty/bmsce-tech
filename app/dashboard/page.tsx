@@ -178,7 +178,7 @@ export default function DashboardPage() {
                             </span>
                             {q.isAnonymous && (
                               <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 rounded text-blue-700 dark:text-blue-300">
-                                Anonymous
+                                Anonymous Allowed
                               </span>
                             )}
                           </div>
@@ -240,11 +240,11 @@ export default function DashboardPage() {
                   <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded">
                     {selectedQuestion.audience === "all"
                       ? "All Students"
-                      : "CR Only"}
+                      : "Only for MCA 1st yr Sec B"}
                   </span>
                   {selectedQuestion.isAnonymous && (
                     <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 rounded text-blue-700 dark:text-blue-300">
-                      Anonymous
+                      Anonymous Allowed
                     </span>
                   )}
                 </div>
