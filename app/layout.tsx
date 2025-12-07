@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BMSCE.tech",
+  title: "BMSCE . tech",
   description: "Create and manage quick questions for your class",
   icons: {
     icon: "/favicon.svg",

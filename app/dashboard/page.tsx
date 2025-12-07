@@ -13,9 +13,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Question, Response } from "@/lib/types";
-import { Download, ArrowLeft, ExternalLink } from "lucide-react";
+import { Download, ArrowLeft, ExternalLink, Github } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
+import { Footer } from "@/components/footer";
+import { Spinner } from "@/components/ui/spinner";
 
 export default function DashboardPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -23,10 +25,12 @@ export default function DashboardPage() {
     null
   );
   const [responses, setResponses] = useState<Response[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
+        setLoading(true);
         const response = await fetch("/api/questions");
         if (response.ok) {
           const data = await response.json();
@@ -34,6 +38,8 @@ export default function DashboardPage() {
         }
       } catch (error) {
         console.error("Error fetching questions:", error);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -52,8 +58,8 @@ export default function DashboardPage() {
 
     const headers = ["Name", "Roll No", "Answer", "Submitted At"];
     const rows = responses.map((r) => [
-      r.student?.name || "Anonymous",
-      r.student?.rollNo || "N/A",
+      r.student?.name || r.name || "Anonymous",
+      r.student?.rollNo || (r.name ? "-" : "N/A"),
       r.answer,
       new Date(r.submittedAt).toLocaleString(),
     ]);
@@ -91,27 +97,53 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
       <nav className="border-b bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto p-0 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo.svg" alt="BMSCE.tech+" width={100} height={100} />
+        <div className="max-w-7xl mx-auto px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-0  lg:gap-4">
+          <Link href="/" className="flex items-center">
+            <Image src="/logo.svg" alt="BMSCE.tech" width={100} height={100} />
           </Link>
-          <Link href="/">
-            <Button variant="outline">Create Question</Button>
-          </Link>
+          <a
+            href="https://github.com/sandeep5shetty/bmsce-tech"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden lg:block"
+          >
+            <Button variant="outline" size="sm" className="gap-2">
+              <Github className="w-4 h-4" />
+              View on GitHub
+            </Button>
+          </a>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="flex-1 max-w-7xl mx-auto px-4 py-8 w-full">
         {!selectedQuestion ? (
           <div className="space-y-4">
             <h2 className="text-2xl font-semibold mb-4">Your Questions</h2>
-            {questions.length === 0 ? (
-              <Card>
-                <CardContent className="pt-6 text-center text-muted-foreground">
-                  No questions created yet. Create your first question to get
-                  started!
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-4">
+                <Spinner size="lg" />
+                <p className="text-sm text-muted-foreground">
+                  Loading questions...
+                </p>
+              </div>
+            ) : questions.length === 0 ? (
+              <Card className="border-dashed">
+                <CardContent className="pt-12 pb-12 text-center">
+                  <div className="max-w-md mx-auto space-y-4">
+                    <div className="text-5xl mb-4">📝</div>
+                    <h3 className="text-xl font-semibold">No questions yet</h3>
+                    <p className="text-muted-foreground">
+                      Get started by creating your first question. Share it with
+                      students and track their responses in real-time.
+                    </p>
+                    <Link href="/create">
+                      <Button className="mt-4">
+                        Create Your First Question
+                      </Button>
+                    </Link>
+                  </div>
                 </CardContent>
               </Card>
             ) : (
@@ -229,10 +261,13 @@ export default function DashboardPage() {
                         {responses.map((response) => (
                           <TableRow key={response.id}>
                             <TableCell className="font-medium">
-                              {response.student?.name || "Anonymous"}
+                              {response.student?.name ||
+                                response.name ||
+                                "Anonymous"}
                             </TableCell>
                             <TableCell className="text-muted-foreground">
-                              {response.student?.rollNo || "N/A"}
+                              {response.student?.rollNo ||
+                                (response.name ? "-" : "N/A")}
                             </TableCell>
                             <TableCell>
                               <span
@@ -261,6 +296,7 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+      <Footer />
     </div>
   );
 }

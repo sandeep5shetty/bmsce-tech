@@ -25,5 +25,6 @@ export interface Response {
   answer: string;
   studentId?: string;
   student?: Student;
+  name?: string;
   submittedAt: Date;
 }

@@ -27,6 +27,7 @@ model Response {
   questionId  String
   answer      String
   studentId   String?
+  name        String?  // For "all" audience responses
   submittedAt DateTime @default(now())
   question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
   student     Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
