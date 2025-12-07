@@ -1,4 +1,4 @@
-# ClassPulse
+# BMSCE.tech
 
 A minimal, professional web application where anyone can create quick questions and collect student responses in real-time. Built for educational purposes to demonstrate modern full-stack web development practices.
 
