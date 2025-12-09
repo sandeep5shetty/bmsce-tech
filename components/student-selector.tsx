@@ -101,7 +101,7 @@ export function StudentSelector({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[var(--radix-popover-trigger-width)] max-w-[95vw] p-0"
+        className="w-(--radix-popover-trigger-width) max-w-[95vw] p-0"
         align="start"
         sideOffset={4}
         alignOffset={0}

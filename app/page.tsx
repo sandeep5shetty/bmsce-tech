@@ -1,13 +1,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Footer } from "@/components/footer";
 import { Github } from "lucide-react";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
       <nav className="border-b bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-0  lg:gap-4">
           <Link href="/" className="flex items-center">
@@ -52,6 +51,15 @@ export default function Home() {
               className="text-base px-8 w-full sm:w-auto"
             >
               View Dashboard
+            </Button>
+          </Link>
+          <Link href="/random-picker">
+            <Button
+              size="lg"
+              variant="outline"
+              className="text-base px-8 w-full sm:w-auto"
+            >
+              Random Picker
             </Button>
           </Link>
         </div>

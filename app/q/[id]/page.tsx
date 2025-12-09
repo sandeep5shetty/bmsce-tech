@@ -121,7 +121,7 @@ export default function QuestionPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Spinner size="lg" />
           <p className="text-sm text-muted-foreground">Loading question...</p>
@@ -132,7 +132,7 @@ export default function QuestionPage() {
 
   if (!question) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center">
         <Card className="w-full max-w-md mx-4">
           <CardContent className="pt-6">
             <p className="text-center text-muted-foreground">
@@ -163,7 +163,7 @@ export default function QuestionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
       <nav className="border-b bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-4 py-4 max-sm:py-3 flex flex-col sm:flex-row items-center justify-between gap-4">
           <Link href="/" className="flex items-center">

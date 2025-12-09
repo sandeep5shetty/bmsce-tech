@@ -3,11 +3,10 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Github } from "lucide-react";
-import { Footer } from "@/components/footer";
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
       <nav className="border-b bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 flex max-sm:py-2 flex-col sm:flex-row items-center justify-between gap-4">
           <Link href="/" className="flex items-center">
@@ -216,7 +215,16 @@ export default function PrivacyPage() {
         </Card>
       </main>
 
-      <Footer />
+      <footer className="border-t bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm mt-auto">
+        <div className="max-w-7xl mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
+          <Link
+            href="/privacy"
+            className="hover:text-foreground transition-colors"
+          >
+            Privacy Policy & About
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 }
