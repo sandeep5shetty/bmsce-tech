@@ -31,7 +31,7 @@ export default function RandomPickerPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [pickedStudents, setPickedStudents] = useState<Student[]>([]);
   const [alreadyPicked, setAlreadyPicked] = useState<Set<string>>(new Set());
-  const [numberOfPicks, setNumberOfPicks] = useState<number>(1);
+  const [numberOfPicks, setNumberOfPicks] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [picking, setPicking] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -109,6 +109,11 @@ export default function RandomPickerPage() {
   };
 
   const pickRandomStudents = (addToCurrent = false) => {
+    if (numberOfPicks < 1) {
+      toast.error("Please enter a valid number (minimum 1)");
+      return;
+    }
+
     if (students.length === 0) {
       toast.error("No students available");
       return;
@@ -394,13 +399,12 @@ export default function RandomPickerPage() {
                         type="number"
                         min="1"
                         max={availableCount}
-                        value={numberOfPicks}
+                        value={numberOfPicks || ""}
                         onChange={(e) =>
-                          setNumberOfPicks(
-                            Math.max(1, parseInt(e.target.value) || 1)
-                          )
+                          setNumberOfPicks(parseInt(e.target.value) || 0)
                         }
                         className="text-base w-full"
+                        placeholder="Enter no. of students"
                       />
                     </div>
                     <div className="flex flex-wrap gap-2 w-full sm:w-auto">
