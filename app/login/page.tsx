@@ -1,19 +1,4 @@
 "use client";
-/* import { signIn } from "next-auth/react";
-
-export default function LoginButton() {
-  return (
-    <button
-      onClick={() => signIn("google")}
-      className="px-4 py-2   bg-black text-white rounded"
-    >
-      Login with BMSCE Email
-    </button>
-  );
-} */
-
-
-// app/login/page.jsx (or pages/login.jsx depending on your setup)
 import LoginButton from "@/components/LoginButton";
 
 export default function LoginPage() {
@@ -26,4 +11,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
