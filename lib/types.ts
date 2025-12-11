@@ -1,21 +1,13 @@
 export type QuestionType = "yes-no" | "short-answer";
 export type Audience = "all" | "cr-only";
 
-export interface Student {
-  id: string;
-  name: string;
-  usn: string;
-  section: string;
-  createdAt: Date;
-}
-
 export interface Question {
   id: string;
   question: string;
   type: QuestionType;
   audience: Audience;
-  isAnonymous: boolean;
-  requireName: boolean;
+  isAnonymous: boolean;   // you may remove this later since no anonymous allowed
+  requireName: boolean;   // unused now
   createdAt: Date;
   responses?: Response[];
 }
@@ -24,8 +16,6 @@ export interface Response {
   id: string;
   questionId: string;
   answer: string;
-  studentId?: string;
-  student?: Student;
-  name?: string;
+  email: string;          // ✅ ALWAYS present (no anonymous)
   submittedAt: Date;
 }

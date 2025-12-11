@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import Providers from "@/components/Providers"; // ✅ IMPORTANT
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -47,19 +48,28 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        
+        {/* 🔥 SESSION PROVIDER FIX */}
+        <ClientWrapper>
+          {children}
+        </ClientWrapper>
+
         <Toaster />
         <Analytics />
         <SpeedInsights />
       </body>
     </html>
   );
+}
+
+/** 🔥 Client boundary so Providers works */
+function ClientWrapper({ children }: { children: React.ReactNode }) {
+  "use client";
+  return <Providers>{children}</Providers>;
 }

@@ -1,79 +1,216 @@
-import Link from "next/link";
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import { Footer } from "@/components/footer";
-import { Github } from "lucide-react";
+"use client";
 
-export default function Home() {
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import Image from "next/image";
+import Link from "next/link";
+import { Footer } from "@/components/footer";
+import { Spinner } from "@/components/ui/spinner";
+
+export default function QuestionPage() {
+  const params = useParams();
+  const router = useRouter();
+  const { data: session, status } = useSession();
+  const userEmail = session?.user?.email;
+
+  const [question, setQuestion] = useState<any>(null);
+  const [answer, setAnswer] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      const callbackUrl = encodeURIComponent(window.location.href);
+      window.location.href = `/login?callbackUrl=${callbackUrl}`;
+    }
+  }, [status]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function fetchQuestion() {
+      try {
+        setLoading(true);
+        const res = await fetch(`/api/questions/${params.id}`);
+        if (!mounted) return;
+        if (res.ok) setQuestion(await res.json());
+        else setQuestion(null);
+      } catch (e) {
+        console.error(e);
+        if (mounted) setQuestion(null);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    fetchQuestion();
+    return () => {
+      mounted = false;
+    };
+  }, [params.id]);
+
+  const handleSubmit = async (selectedAnswer?: string, anonymous = false) => {
+    const finalAnswer = selectedAnswer || answer;
+    if (!finalAnswer) {
+      toast.error("Please provide an answer");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/responses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionId: question.id,
+          answer: finalAnswer,
+          email: anonymous ? null : userEmail,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setSubmitted(true);
+      toast.success("Response submitted!");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to submit. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (status === "loading" || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (status === "unauthenticated") return null;
+
+  if (session && !userEmail?.endsWith("@bmsce.ac.in")) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-red-600 font-semibold text-lg">
+          Only BMSCE students can answer this question.
+        </p>
+      </div>
+    );
+  }
+
+  if (!question) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Question not found.</p>
+      </div>
+    );
+  }
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md shadow-lg">
+          <CardContent className="text-center space-y-4 p-6">
+            <span className="text-green-600 text-6xl block">✔</span>
+            <h2 className="text-2xl font-semibold">Thank You!</h2>
+            <p>Your response has been recorded.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
-      <nav className="border-b bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-0  lg:gap-4">
-          <Link href="/" className="flex items-center">
-            <Image src="/logo.svg" alt="BMSCE.tech" width={100} height={100} />
+    <div className="min-h-screen flex flex-col">
+      <nav className="border-b bg-white/50 backdrop-blur-sm">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+          <Link href="/">
+            <Image src="/logo.svg" alt="logo" width={100} height={100} />
           </Link>
-          <a
-            href="https://github.com/sandeep5shetty/bmsce-tech"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden lg:block"
-          >
-            <Button variant="outline" size="sm" className="gap-2">
-              <Github className="w-4 h-4" />
-              View on GitHub
-            </Button>
-          </a>
         </div>
       </nav>
 
-      <main className="flex-1 flex flex-col items-center justify-center px-4">
-        <div className="space-y-4 text-center mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-normal sm:tracking-tight lg:leading-12 lg:text-4xl">
-            An Open-Source Community <br />
-            for <br />
-            BMSCE Students
-          </h1>
-          <p className="text-sm text-neutral-600 max-sm:w-[88vw] sm:w-[500px] mx-auto">
-            Still building. New features and collaborations ahead.
-          </p>
-        </div>
+      <main className="flex-1 max-w-2xl mx-auto px-4 py-12 w-full">
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-2xl">{question.question}</CardTitle>
+          </CardHeader>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-          <Link href="/create">
-            <Button size="lg" className="text-base px-8 w-full sm:w-auto">
-              Create Question
-            </Button>
-          </Link>
-          <Link href="/dashboard">
-            <Button
-              size="lg"
-              variant="outline"
-              className="text-base px-8 w-full sm:w-auto"
-            >
-              View Dashboard
-            </Button>
-          </Link>
-          <Link href="/random-picker">
-            <Button
-              size="lg"
-              variant="outline"
-              className="text-base px-8 w-full sm:w-auto"
-            >
-              Random Picker
-            </Button>
-          </Link>
-        </div>
-        <div className="text-sm text-muted-foreground text-center sm:text-right mt-4">
-          Made by{" "}
-          <a
-            href="https://sandeepshetty.dev"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold transition-colors underline text-primary/75 hover:text-primary/45 "
-          >
-            Sandy
-          </a>
-        </div>
+          <CardContent className="space-y-6">
+            {question.type === "yes-no" ? (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <Button
+                    size="lg"
+                    onClick={() => setAnswer("Yes")}
+                    variant={answer === "Yes" ? "default" : "outline"}
+                  >
+                    ✔ Yes
+                  </Button>
+
+                  <Button
+                    size="lg"
+                    onClick={() => setAnswer("No")}
+                    variant={answer === "No" ? "default" : "outline"}
+                  >
+                    ✘ No
+                  </Button>
+                </div>
+
+                <Button
+                  className="w-full"
+                  onClick={() => handleSubmit()}
+                  disabled={!answer || submitting}
+                >
+                  {submitting ? "Submitting..." : "Submit Response"}
+                </Button>
+
+                {question.isAnonymous && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => handleSubmit(undefined, true)}
+                    disabled={!answer || submitting}
+                  >
+                    Submit Anonymously
+                  </Button>
+                )}
+              </>
+            ) : (
+              <>
+                <Label>Your Answer</Label>
+                <Input
+                  placeholder="Type here..."
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                />
+
+                <Button
+                  className="w-full"
+                  onClick={() => handleSubmit()}
+                  disabled={!answer || submitting}
+                >
+                  {submitting ? "Submitting..." : "Submit Response"}
+                </Button>
+
+                {question.isAnonymous && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => handleSubmit(undefined, true)}
+                    disabled={!answer || submitting}
+                  >
+                    Submit Anonymously
+                  </Button>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
       </main>
 
       <Footer />

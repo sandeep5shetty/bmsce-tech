@@ -3,8 +3,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const search = searchParams.get("search") || "";
+    const search = request.nextUrl.searchParams.get("search") || "";
 
     const students = await prisma.student.findMany({
       where: search

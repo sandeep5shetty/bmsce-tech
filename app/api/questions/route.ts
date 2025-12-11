@@ -7,12 +7,11 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       include: {
         responses: {
-          include: {
-            student: true,
-          },
+          orderBy: { submittedAt: "asc" },
         },
       },
     });
+
     return NextResponse.json(questions);
   } catch (error) {
     console.error("Error fetching questions:", error);
@@ -26,6 +25,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
     const question = await prisma.question.create({
       data: {
         question: body.question,
@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
         requireName: body.requireName,
       },
     });
+
     return NextResponse.json(question);
   } catch (error) {
     console.error("Error creating question:", error);
