@@ -3,11 +3,19 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useSession, signIn } from "next-auth/react";
+<<<<<<< HEAD
+=======
+import { toast } from "sonner";
+
+>>>>>>> 71dc632 (Added Livewall)
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+<<<<<<< HEAD
 import { toast } from "sonner";
+=======
+>>>>>>> 71dc632 (Added Livewall)
 import Image from "next/image";
 import Link from "next/link";
 import { Footer } from "@/components/footer";
@@ -27,6 +35,7 @@ export default function QuestionPage() {
   // redirect unauthenticated
   useEffect(() => {
     if (status === "unauthenticated") {
+<<<<<<< HEAD
       if (typeof window !== "undefined") {
         signIn("google", { callbackUrl: window.location.href });
       }
@@ -36,6 +45,13 @@ export default function QuestionPage() {
   /* ===========================================
         FIXED FETCH QUESTION LOGIC
      =========================================== */
+=======
+      signIn("google", { callbackUrl: window.location.href });
+    }
+  }, [status]);
+
+  // fetch question ONCE
+>>>>>>> 71dc632 (Added Livewall)
   useEffect(() => {
     let active = true;
 
@@ -50,10 +66,14 @@ export default function QuestionPage() {
             ? params.id[0]
             : "";
 
+<<<<<<< HEAD
         if (!id) {
           console.error("❌ No ID found in params");
           return;
         }
+=======
+        if (!id) return;
+>>>>>>> 71dc632 (Added Livewall)
 
         const r = await fetch(`/api/questions/${id}`);
         if (!active) return;
@@ -70,7 +90,11 @@ export default function QuestionPage() {
     };
   }, [params.id]);
 
+<<<<<<< HEAD
   // submit answer
+=======
+  // submit answer → SEND PAYLOAD
+>>>>>>> 71dc632 (Added Livewall)
   const handleSubmit = async (selectedAnswer?: string) => {
     const finalAnswer = selectedAnswer ?? answer;
 
@@ -96,8 +120,14 @@ export default function QuestionPage() {
         }),
       });
 
+<<<<<<< HEAD
       if (!res.ok) throw new Error("Failed to submit");
 
+=======
+      if (!res.ok) throw new Error();
+
+      // 🔥 payload sent → server triggers pusher
+>>>>>>> 71dc632 (Added Livewall)
       setSubmitted(true);
       toast.success("Response submitted!");
     } catch {
@@ -116,6 +146,7 @@ export default function QuestionPage() {
     );
   }
 
+<<<<<<< HEAD
   // block non-BMSCE email
   if (status === "authenticated" && !userEmail?.endsWith("@bmsce.ac.in")) {
     return (
@@ -139,6 +170,8 @@ export default function QuestionPage() {
   }
 
   // question not found
+=======
+>>>>>>> 71dc632 (Added Livewall)
   if (!question) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -147,7 +180,10 @@ export default function QuestionPage() {
     );
   }
 
+<<<<<<< HEAD
   // submitted
+=======
+>>>>>>> 71dc632 (Added Livewall)
   if (submitted) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -165,7 +201,11 @@ export default function QuestionPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <nav className="border-b bg-white/50 backdrop-blur-sm">
+<<<<<<< HEAD
         <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+=======
+        <div className="max-w-6xl mx-auto px-4 py-4">
+>>>>>>> 71dc632 (Added Livewall)
           <Link href="/">
             <Image src="/logo.svg" alt="logo" width={100} height={100} />
           </Link>
@@ -175,7 +215,13 @@ export default function QuestionPage() {
       <main className="flex-1 max-w-2xl mx-auto px-4 py-12">
         <Card className="shadow-lg">
           <CardHeader>
+<<<<<<< HEAD
             <CardTitle className="text-2xl">{question.question}</CardTitle>
+=======
+            <CardTitle className="text-2xl">
+              {question.question}
+            </CardTitle>
+>>>>>>> 71dc632 (Added Livewall)
           </CardHeader>
 
           <CardContent className="space-y-6">
