@@ -16,6 +16,12 @@ const people = [
   },
   {
     id: 3,
+    name: "Tarun G Naidu",
+    designation: "Backend Developer",
+    image: "/tarun.jpg",
+  },
+  {
+    id: 4,
     name: "Wish to Contribute?",
     designation: "Join us on GitHub",
     image: "plus",
