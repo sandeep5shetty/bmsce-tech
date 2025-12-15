@@ -1,0 +1,32 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "entry": [
+    "app/**/*.{ts,tsx}",
+    "components/common/**/*.{ts,tsx}",
+    "components/ui/**/*.{ts,tsx}",
+    "components/providers/**/*.{ts,tsx}",
+    "features/**/components/**/*.{ts,tsx}",
+    "features/**/lib/**/*.{ts,tsx}",
+    "lib/**/*.{ts,tsx}",
+    "actions/**/*.{ts,tsx}",
+    "types/**/*.{ts,tsx}",
+    "validation/**/*.{ts,tsx}",
+    "!components/icons/**",
+    "!features/**/components/icons/**"
+  ],
+  "project": [
+    "components/icons/**/*.{ts,tsx}",
+    "features/**/components/icons/**/*.{ts,tsx}"
+  ],
+  "ignore": [],
+  "ignoreDependencies": [],
+  "ignoreExportsUsedInFile": true,
+  "includeEntryExports": false,
+  "rules": {
+    "files": "warn",
+    "exports": "off",
+    "duplicates": "off",
+    "dependencies": "off",
+    "devDependencies": "off"
+  }
+}

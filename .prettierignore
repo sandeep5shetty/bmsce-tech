@@ -1,0 +1,49 @@
+# Dependencies
+node_modules
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+bun.lock
+
+# Build outputs
+.next
+out
+build
+dist
+.vercel
+.turbo
+
+# Cache
+.cache
+.parcel-cache
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.development
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+
+# Generated files
+*.min.js
+*.min.css
+
+# Prisma
+prisma/migrations
+
+# Public assets (optional - uncomment if needed)
+# public/
+
+# Config that shouldn't be formatted
+pnpm-workspace.yaml

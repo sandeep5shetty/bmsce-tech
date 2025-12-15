@@ -1,0 +1,25 @@
+{
+  "importOrder": [
+    "^(react|react-dom)$",
+    "^next",
+    "<THIRD_PARTY_MODULES>",
+    "^@/components/ui/(.*)$",
+    "^@/components/common/(.*)$",
+    "^@/components/icons/(.*)$",
+    "^@/components/providers/(.*)$",
+    "^@/features/(.*)$",
+    "^@/lib/(.*)$",
+    "^@/actions/(.*)$",
+    "^@/types/(.*)$",
+    "^@/validation/(.*)$",
+    "^@/app/(.*)$",
+    "^@/(.*)$",
+    "^[./]"
+  ],
+  "importOrderSeparation": true,
+  "importOrderSortSpecifiers": true,
+  "plugins": [
+    "@trivago/prettier-plugin-sort-imports",
+    "prettier-plugin-tailwindcss"
+  ]
+}

@@ -1,0 +1,1 @@
+ALTER TABLE "list_project" DROP COLUMN "order";
