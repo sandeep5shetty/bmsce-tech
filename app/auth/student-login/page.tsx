@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
 import Link from "next/link";
 
+import { useSearchParams } from "next/navigation";
 import { useRouter } from "@bprogress/next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -24,8 +25,10 @@ import { studentSignIn } from "@/actions/auth";
 
 import { Loader, Lock, Mail } from "@/components/icons";
 
-export default function StudentLoginPage() {
+function StudentLoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") ?? "/placement";
   const queryClient = useQueryClient();
 
   const [email, setEmail] = useState("");
@@ -41,7 +44,7 @@ export default function StudentLoginPage() {
           ? "Account created! Welcome to Placement Pulse."
           : "Signed in successfully.",
       );
-      router.push("/placement");
+      router.push(callbackUrl);
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Sign-in failed. Try again.");
@@ -149,5 +152,13 @@ export default function StudentLoginPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function StudentLoginPage() {
+  return (
+    <Suspense>
+      <StudentLoginForm />
+    </Suspense>
   );
 }

@@ -4,7 +4,8 @@ import { useState } from "react";
 
 import Link from "next/link";
 
-import { useRouter } from "@bprogress/next";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter as useBProgressRouter } from "@bprogress/next";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -37,7 +38,9 @@ import {
 } from "@/components/icons";
 
 const Login = () => {
-  const router = useRouter();
+  const router = useBProgressRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
   const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
 
@@ -64,7 +67,7 @@ const Login = () => {
       // Invalidate user query to update navbar
       queryClient.invalidateQueries({ queryKey: ["user"] });
       toast.success("Successfully logged in!");
-      router.push("/dashboard");
+      router.push(callbackUrl);
     },
     onError: (error) => {
       toast.error(error.message || "Something went wrong!");
@@ -235,4 +238,12 @@ const Login = () => {
   );
 };
 
-export default Login;
+import { Suspense } from "react";
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <Login />
+    </Suspense>
+  );
+}
