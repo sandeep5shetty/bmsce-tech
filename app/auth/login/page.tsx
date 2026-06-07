@@ -218,6 +218,16 @@ const Login = () => {
                 Sign up
               </Link>
             </div>
+
+            <div className="text-center text-sm">
+              <span className="text-muted-foreground">MCA student? </span>
+              <Link
+                href="/auth/student-login"
+                className="text-primary font-medium hover:underline"
+              >
+                Sign in with USN
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -18,6 +18,11 @@ import { validateOrThrow } from "@/validation";
 
 const utapi = new UTApi();
 
+export async function getIsCoordinator(): Promise<boolean> {
+  const u = await getUser();
+  return u?.isCoordinator ?? false;
+}
+
 export async function getUser(): Promise<User | null> {
   const session = await auth.api.getSession({
     headers: await headers(),

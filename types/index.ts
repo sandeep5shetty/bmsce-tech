@@ -5,6 +5,29 @@ import * as schema from "@/db/schema";
 export type User = typeof schema.user.$inferSelect;
 export type NewUser = typeof schema.user.$inferInsert;
 
+// Poll / Question Types
+export type Question = typeof schema.question.$inferSelect;
+export type NewQuestion = typeof schema.question.$inferInsert;
+export type Response = typeof schema.response.$inferSelect;
+export type NewResponse = typeof schema.response.$inferInsert;
+export type Student = typeof schema.student.$inferSelect;
+export type NewStudent = typeof schema.student.$inferInsert;
+
+// Placement Types
+export type PlacementAcademicRecord =
+  typeof schema.placementAcademicRecord.$inferSelect;
+export type NewPlacementAcademicRecord =
+  typeof schema.placementAcademicRecord.$inferInsert;
+export type PlacementDrive = typeof schema.placementDrive.$inferSelect;
+export type NewPlacementDrive = typeof schema.placementDrive.$inferInsert;
+export type PlacementStudentProfile =
+  typeof schema.placementStudentProfile.$inferSelect;
+export type NewPlacementStudentProfile =
+  typeof schema.placementStudentProfile.$inferInsert;
+export type PlacementResponse = typeof schema.placementResponse.$inferSelect;
+export type NewPlacementResponse =
+  typeof schema.placementResponse.$inferInsert;
+
 // Session Types
 export type Session = typeof schema.session.$inferSelect;
 export type NewSession = typeof schema.session.$inferInsert;
