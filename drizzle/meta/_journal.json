@@ -43,6 +43,13 @@
       "when": 1780820326699,
       "tag": "0005_blushing_gertrude_yorkes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780825000000,
+      "tag": "0006_quiz_platform",
+      "breakpoints": true
     }
   ]
 }

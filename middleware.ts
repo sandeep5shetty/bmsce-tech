@@ -6,14 +6,23 @@ const PROTECTED_PREFIXES = [
   "/questions",
   "/random-picker",
   "/dashboard",
+  "/quiz",
 ];
+
+const QUIZ_PUBLIC_PREFIXES = ["/quiz/join", "/quiz/play"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const isProtected = PROTECTED_PREFIXES.some(
+  const isQuizPublic = QUIZ_PUBLIC_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
+
+  const isProtected =
+    !isQuizPublic &&
+    PROTECTED_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    );
 
   if (!isProtected) return NextResponse.next();
 
@@ -37,5 +46,8 @@ export const config = {
     "/questions/:path*",
     "/random-picker/:path*",
     "/dashboard/:path*",
+    "/quiz",
+    "/quiz/events/:path*",
+    "/quiz/sessions/:path*",
   ],
 };

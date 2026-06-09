@@ -127,6 +127,14 @@ const Navbar = () => {
           </li>
           <li>
             <Link
+              href="/quiz"
+              className="text-muted-foreground hover:text-foreground rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+            >
+              Quiz
+            </Link>
+          </li>
+          <li>
+            <Link
               href="/random-picker"
               className="text-muted-foreground hover:text-foreground rounded-lg px-3 py-2 text-sm font-medium transition-colors"
             >

@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   integer,
@@ -8,6 +8,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // User Table
@@ -310,6 +311,212 @@ export const placementAcademicRecord = pgTable("placement_academic_record", {
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
 });
 
+// Quiz Event Table
+export const quizEvent = pgTable(
+  "quiz_event",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    adminId: text("admin_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    status: text("status").notNull().default("draft"),
+    joinCode: text("join_code").unique(),
+    logoUrl: text("logo_url"),
+    themeId: text("theme_id").notNull().default("default"),
+    customTheme: jsonb("custom_theme"),
+    anonymousMode: boolean("anonymous_mode").notNull().default(false),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("quiz_events_admin_title_unique").on(
+      t.adminId,
+      sql`lower(${t.title})`,
+    ),
+  ],
+);
+
+// Quiz Question Table
+export const quizQuestion = pgTable(
+  "quiz_question",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    eventId: text("event_id")
+      .notNull()
+      .references(() => quizEvent.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    questionType: text("question_type").notNull(),
+    text: text("text").notNull(),
+    imageUrl: text("image_url"),
+    timeLimit: integer("time_limit").notNull().default(20),
+    ratingMin: integer("rating_min"),
+    ratingMax: integer("rating_max"),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [unique("quiz_questions_event_position").on(t.eventId, t.position)],
+);
+
+// Quiz Answer Option Table
+export const quizAnswerOption = pgTable(
+  "quiz_answer_option",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    questionId: text("question_id")
+      .notNull()
+      .references(() => quizQuestion.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    text: text("text"),
+    imageUrl: text("image_url"),
+    isCorrect: boolean("is_correct").notNull().default(false),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("quiz_answer_options_question_position").on(
+      t.questionId,
+      t.position,
+    ),
+  ],
+);
+
+// Quiz Session Table
+export const quizSession = pgTable("quiz_session", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  eventId: text("event_id")
+    .notNull()
+    .references(() => quizEvent.id, { onDelete: "cascade" }),
+  adminId: text("admin_id")
+    .notNull()
+    .references(() => user.id),
+  status: text("status").notNull().default("lobby"),
+  currentQuestionId: text("current_question_id").references(
+    () => quizQuestion.id,
+    { onDelete: "set null" },
+  ),
+  currentQuestionIndex: integer("current_question_index"),
+  questionStartedAt: timestamp("question_started_at", { mode: "date" }),
+  participantCount: integer("participant_count").notNull().default(0),
+  startedAt: timestamp("started_at", { mode: "date" }),
+  endedAt: timestamp("ended_at", { mode: "date" }),
+  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+});
+
+// Quiz Session Participant Table
+export const quizSessionParticipant = pgTable(
+  "quiz_session_participant",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => quizSession.id, { onDelete: "cascade" }),
+    displayName: text("display_name").notNull(),
+    avatar: text("avatar").notNull(),
+    totalScore: integer("total_score").notNull().default(0),
+    rank: integer("rank"),
+    isConnected: boolean("is_connected").notNull().default(true),
+    disconnectedAt: timestamp("disconnected_at", { mode: "date" }),
+    participantToken: text("participant_token").notNull().unique(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("quiz_session_participants_session_display_name").on(
+      t.sessionId,
+      t.displayName,
+    ),
+  ],
+);
+
+// Quiz Participant Answer Table
+export const quizParticipantAnswer = pgTable(
+  "quiz_participant_answer",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => quizSession.id, { onDelete: "cascade" }),
+    participantId: text("participant_id")
+      .notNull()
+      .references(() => quizSessionParticipant.id, { onDelete: "cascade" }),
+    questionId: text("question_id")
+      .notNull()
+      .references(() => quizQuestion.id, { onDelete: "cascade" }),
+    selectedOptionIds: text("selected_option_ids").array(),
+    openTextResponse: text("open_text_response"),
+    ratingValue: integer("rating_value"),
+    isCorrect: boolean("is_correct"),
+    scoreAwarded: integer("score_awarded").notNull().default(0),
+    responseTimeMs: integer("response_time_ms"),
+    submittedAt: timestamp("submitted_at", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    unique("quiz_participant_answers_participant_question").on(
+      t.participantId,
+      t.questionId,
+    ),
+  ],
+);
+
+// Quiz Analytics Snapshot Table
+export const quizAnalyticsSnapshot = pgTable(
+  "quiz_analytics_snapshot",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => quizSession.id, { onDelete: "cascade" }),
+    questionId: text("question_id")
+      .notNull()
+      .references(() => quizQuestion.id, { onDelete: "cascade" }),
+    totalResponses: integer("total_responses").notNull().default(0),
+    optionCounts: jsonb("option_counts").notNull().default({}),
+    avgResponseTimeMs: integer("avg_response_time_ms"),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("quiz_analytics_snapshots_session_question").on(
+      t.sessionId,
+      t.questionId,
+    ),
+  ],
+);
+
+// Quiz Join Code History Table
+export const quizJoinCodeHistory = pgTable("quiz_join_code_history", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  eventId: text("event_id")
+    .notNull()
+    .references(() => quizEvent.id, { onDelete: "cascade" }),
+  joinCode: text("join_code").notNull(),
+  issuedAt: timestamp("issued_at", { mode: "date" }).notNull().defaultNow(),
+  revokedAt: timestamp("revoked_at", { mode: "date" }),
+});
+
 // Relations
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
@@ -319,6 +526,8 @@ export const userRelations = relations(user, ({ many }) => ({
   reviews: many(review),
   placementProfile: many(placementStudentProfile),
   placementResponses: many(placementResponse),
+  quizEvents: many(quizEvent),
+  quizSessions: many(quizSession),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -428,6 +637,111 @@ export const placementResponseRelations = relations(
     user: one(user, {
       fields: [placementResponse.userId],
       references: [user.id],
+    }),
+  }),
+);
+
+export const quizEventRelations = relations(quizEvent, ({ one, many }) => ({
+  admin: one(user, {
+    fields: [quizEvent.adminId],
+    references: [user.id],
+  }),
+  questions: many(quizQuestion),
+  sessions: many(quizSession),
+  joinCodeHistory: many(quizJoinCodeHistory),
+}));
+
+export const quizQuestionRelations = relations(
+  quizQuestion,
+  ({ one, many }) => ({
+    event: one(quizEvent, {
+      fields: [quizQuestion.eventId],
+      references: [quizEvent.id],
+    }),
+    answerOptions: many(quizAnswerOption),
+    participantAnswers: many(quizParticipantAnswer),
+    analyticsSnapshots: many(quizAnalyticsSnapshot),
+    currentSessions: many(quizSession),
+  }),
+);
+
+export const quizAnswerOptionRelations = relations(
+  quizAnswerOption,
+  ({ one }) => ({
+    question: one(quizQuestion, {
+      fields: [quizAnswerOption.questionId],
+      references: [quizQuestion.id],
+    }),
+  }),
+);
+
+export const quizSessionRelations = relations(quizSession, ({ one, many }) => ({
+  event: one(quizEvent, {
+    fields: [quizSession.eventId],
+    references: [quizEvent.id],
+  }),
+  admin: one(user, {
+    fields: [quizSession.adminId],
+    references: [user.id],
+  }),
+  currentQuestion: one(quizQuestion, {
+    fields: [quizSession.currentQuestionId],
+    references: [quizQuestion.id],
+  }),
+  participants: many(quizSessionParticipant),
+  answers: many(quizParticipantAnswer),
+  analyticsSnapshots: many(quizAnalyticsSnapshot),
+}));
+
+export const quizSessionParticipantRelations = relations(
+  quizSessionParticipant,
+  ({ one, many }) => ({
+    session: one(quizSession, {
+      fields: [quizSessionParticipant.sessionId],
+      references: [quizSession.id],
+    }),
+    answers: many(quizParticipantAnswer),
+  }),
+);
+
+export const quizParticipantAnswerRelations = relations(
+  quizParticipantAnswer,
+  ({ one }) => ({
+    session: one(quizSession, {
+      fields: [quizParticipantAnswer.sessionId],
+      references: [quizSession.id],
+    }),
+    participant: one(quizSessionParticipant, {
+      fields: [quizParticipantAnswer.participantId],
+      references: [quizSessionParticipant.id],
+    }),
+    question: one(quizQuestion, {
+      fields: [quizParticipantAnswer.questionId],
+      references: [quizQuestion.id],
+    }),
+  }),
+);
+
+export const quizAnalyticsSnapshotRelations = relations(
+  quizAnalyticsSnapshot,
+  ({ one }) => ({
+    session: one(quizSession, {
+      fields: [quizAnalyticsSnapshot.sessionId],
+      references: [quizSession.id],
+    }),
+    question: one(quizQuestion, {
+      fields: [quizAnalyticsSnapshot.questionId],
+      references: [quizQuestion.id],
+    }),
+  }),
+);
+
+export const quizJoinCodeHistoryRelations = relations(
+  quizJoinCodeHistory,
+  ({ one }) => ({
+    event: one(quizEvent, {
+      fields: [quizJoinCodeHistory.eventId],
+      references: [quizEvent.id],
     }),
   }),
 );
