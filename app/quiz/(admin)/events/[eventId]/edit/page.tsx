@@ -14,7 +14,7 @@ import { QuizImageUpload } from "@/features/quiz/components/quiz-image-upload"
 import {
   BUILT_IN_THEMES,
   GRADIENT_PRESETS,
-  buildThemeStyle,
+  buildParticipantThemeStyle,
   getThemeById,
   resolveGradient,
   resolvePrimaryHex,
@@ -38,8 +38,8 @@ interface EventData {
  *   - Override the primary colour with a custom hex
  *   - Pick a gradient preset (used for headers, hero areas, and event cards)
  *
- * The selected theme is previewed live within the form using
- * {@link buildThemeStyle}, which sets `--primary`, `--primary-foreground`,
+ * The selected theme is previewed live within the preview card using
+ * {@link buildParticipantThemeStyle}, which sets `--primary`, `--primary-foreground`,
  * `--ring`, and `--event-gradient` CSS variables on the wrapping element.
  *
  * Requirements: 15.1–15.6
@@ -87,7 +87,7 @@ export default function EventEditPage() {
   }, [customPrimary, selectedGradient])
 
   const previewStyle = useMemo(
-    () => buildThemeStyle({ themeId: selectedThemeId, customTheme }),
+    () => buildParticipantThemeStyle({ themeId: selectedThemeId, customTheme }),
     [selectedThemeId, customTheme]
   )
 
@@ -154,7 +154,7 @@ export default function EventEditPage() {
   }
 
   return (
-    <div style={previewStyle} className="container mx-auto mt-8 mb-32 max-w-6xl space-y-6 px-6">
+    <div className="container mx-auto mt-8 mb-32 max-w-6xl space-y-6 px-6">
       <div className="mx-auto max-w-3xl space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
@@ -168,7 +168,7 @@ export default function EventEditPage() {
       </div>
 
       {/* Live preview */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden" style={previewStyle}>
         <div
           className="px-6 py-8 text-white"
           style={{ background: effectiveGradient }}
@@ -411,7 +411,7 @@ export default function EventEditPage() {
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={saving}>
+          <Button type="submit" disabled={saving} className="site-theme">
             {saving ? (
               <>
                 <Spinner size="sm" className="text-primary-foreground" />

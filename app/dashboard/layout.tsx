@@ -11,7 +11,6 @@ import {
 
 import { EmailVerificationRequired } from "@/components/common/email-verification-required";
 
-import { DashboardCreateMenu } from "@/features/dashboard/components/dashboard-create-menu";
 import { DashboardHeader } from "@/features/dashboard/components/header";
 
 import { getUser } from "@/actions/user";
@@ -23,7 +22,7 @@ const DashboardLayout = async ({ children }: { children: React.ReactNode }) => {
 
   if (!user) {
     return (
-      <div className="container mx-auto mt-6 mb-32 max-w-6xl px-6">
+      <div className="container mx-auto mt-6 mb-32 max-w-6xl px-4 sm:px-6">
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -52,12 +51,9 @@ const DashboardLayout = async ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <div className="container mx-auto mt-8 mb-32 max-w-6xl space-y-8 px-6">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <DashboardHeader />
-          <DashboardCreateMenu />
-        </div>
+    <div className="container mx-auto mt-6 mb-32 max-w-6xl space-y-6 px-4 sm:mt-8 sm:space-y-8 sm:px-6">
+      <div className="space-y-6">
+        <DashboardHeader name={user.name ?? undefined} />
         {children}
       </div>
     </div>

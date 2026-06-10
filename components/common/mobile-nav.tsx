@@ -1,203 +1,137 @@
 "use client";
 
-import { useState } from "react";
-
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from "@/components/ui/sheet";
-
-import { ProfileDialog } from "@/features/profile/components/profile-dialog";
 
 import { cn } from "@/lib/utils";
 
-import { logout } from "@/actions/auth";
-
-import { ArrowRight, Logout, NoImage } from "@/components/icons";
-import { User } from "@/types";
-
-import { Dashboard, List, SidebarOpen } from "../icons";
+import { User as UserType } from "@/types";
 
 interface MobileNavProps {
-  user: User | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  isLanding: boolean;
+  user: UserType | null | undefined;
+  pathname: string;
 }
 
-export function MobileNav({ user }: MobileNavProps) {
-  const [open, setOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const pathname = usePathname();
+const appLinks = [
+  { href: "/quiz", label: "Quiz" },
+  { href: "/random-picker", label: "Picker" },
+] as const;
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
+const landingLinks = [
+  { href: "#features", label: "Features" },
+  { href: "#faq", label: "FAQ" },
+] as const;
 
-  const isActive = (path: string) => {
-    if (path === "/dashboard") {
-      return pathname.startsWith("/dashboard");
-    }
-    return pathname === path;
-  };
+export function MobileNav({
+  open,
+  onOpenChange,
+  isLanding,
+  user,
+  pathname,
+}: MobileNavProps) {
+  const close = () => onOpenChange(false);
+
+  const linkClass = (href: string) =>
+    cn(
+      "hover:text-foreground hover:bg-muted/50 block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+      pathname === href || (href !== "/" && pathname.startsWith(href))
+        ? "text-foreground bg-muted/50"
+        : "text-muted-foreground",
+    );
 
   return (
-    <>
-      {user && (
-        <ProfileDialog
-          open={profileOpen}
-          onOpenChange={setProfileOpen}
-          user={user}
-        />
-      )}
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="md:hidden">
-            <SidebarOpen className="h-5 w-5" />
-            <span className="sr-only">Toggle menu</span>
-          </Button>
-        </SheetTrigger>
-        <SheetContent
-          side="left"
-          className="flex w-[300px] flex-col px-0 sm:w-[340px]"
-        >
-          {/* Header with Logo */}
-          <SheetHeader className="px-6 pb-4">
-            <SheetTitle>
-              <Link
-                href="/"
-                className="flex items-center gap-2"
-                onClick={() => setOpen(false)}
-              >
-                <Image src="/bmsce.svg" alt="Logo" width={36} height={36} />
-                <span className="font-serif text-2xl font-semibold">
-                  BMSCE.tech
-                </span>
-              </Link>
-            </SheetTitle>
-          </SheetHeader>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="flex w-[min(100%,20rem)] flex-col">
+        <SheetHeader className="text-left">
+          <SheetTitle className="flex items-center gap-2 font-serif text-xl font-semibold">
+            <Image src="/bmsce.svg" alt="" width={28} height={28} />
+            <span>
+              <span className="tracking-widest">BMSCE</span>.tech
+            </span>
+          </SheetTitle>
+          <SheetDescription className="sr-only">
+            Site navigation menu
+          </SheetDescription>
+        </SheetHeader>
 
-          {/* User Profile Section */}
-          {user && (
+        <nav className="flex flex-1 flex-col gap-1 px-1">
+          {isLanding && (
             <>
+              {landingLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={close}
+                  className={linkClass(link.href)}
+                >
+                  {link.label}
+                </Link>
+              ))}
               <button
+                type="button"
                 onClick={() => {
-                  setOpen(false);
-                  setProfileOpen(true);
+                  toast.message("Don't worry, it's completely free 😌");
+                  close();
                 }}
-                className="bg-accent hover:bg-accent/80 w-full px-6 py-4 text-left transition-colors"
+                className="text-muted-foreground hover:text-foreground hover:bg-muted/50 block w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors"
               >
-                <div className="flex items-center gap-3">
-                  <Avatar className="border-background h-12 w-12 border-2">
-                    <AvatarImage
-                      src={user.image || ""}
-                      alt={user.name || "Profile Pic"}
-                    />
-                    <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
-                      {user.name ? getInitials(user.name) : <NoImage />}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">
-                      {user.name}
-                    </p>
-                    <p className="text-muted-foreground truncate text-xs">
-                      {user.email}
-                    </p>
-                  </div>
-                  <ArrowRight className="text-muted-foreground h-4 w-4" />
-                </div>
+                Pricing
               </button>
-              <Separator />
+              <Separator className="my-2" />
             </>
           )}
 
-          {/* Navigation Links */}
-          <nav className="flex-1 overflow-y-auto py-4">
-            <div className="space-y-1 px-3">
+          {appLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={close}
+              className={linkClass(link.href)}
+            >
+              {link.label}
+            </Link>
+          ))}
+
+          {user && (
+            <>
+              <Separator className="my-2" />
               <Link
                 href="/dashboard"
-                onClick={() => setOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                  isActive("/dashboard")
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent",
-                )}
+                onClick={close}
+                className={linkClass("/dashboard")}
               >
-                <Dashboard className="h-5 w-5" />
-                <span>Dashboard</span>
+                Dashboard
               </Link>
+            </>
+          )}
+        </nav>
 
-              <Link
-                href="/lists"
-                onClick={() => setOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                  isActive("/lists")
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent",
-                )}
-              >
-                <List className="h-5 w-5" />
-                <span>Lists</span>
+        <SheetFooter className="gap-2 sm:flex-col">
+          {!user && (
+            <Button asChild className="w-full">
+              <Link href="/auth/login" onClick={close}>
+                Get Started
               </Link>
-            </div>
-
-            {user && (
-              <>
-                <Separator className="my-4" />
-                <div className="px-3">
-                  <form action={logout}>
-                    <button
-                      type="submit"
-                      className="text-destructive hover:bg-destructive/10 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all"
-                    >
-                      <Logout className="h-5 w-5" />
-                      <span>Sign Out</span>
-                    </button>
-                  </form>
-                </div>
-              </>
-            )}
-
-            {!user && (
-              <>
-                <Separator className="my-4" />
-                <div className="px-6">
-                  <Button asChild className="w-full" size="lg">
-                    <Link href="/auth/login" onClick={() => setOpen(false)}>
-                      Get Started
-                    </Link>
-                  </Button>
-                  <p className="text-muted-foreground mt-3 text-center text-xs">
-                    Already have an account?{" "}
-                    <Link
-                      href="/auth/login"
-                      onClick={() => setOpen(false)}
-                      className="text-primary font-medium hover:underline"
-                    >
-                      Sign in
-                    </Link>
-                  </p>
-                </div>
-              </>
-            )}
-          </nav>
-        </SheetContent>
-      </Sheet>
-    </>
+            </Button>
+          )}
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

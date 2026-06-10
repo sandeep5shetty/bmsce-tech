@@ -11,9 +11,11 @@
     "check:unused-icons": "knip --include files",
     "lint:icons": "knip --reporter json --include files",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "seed:students": "npx tsx scripts/seed-section-b-students.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1065.0",
     "@bprogress/next": "^3.2.12",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/utilities": "^3.2.2",

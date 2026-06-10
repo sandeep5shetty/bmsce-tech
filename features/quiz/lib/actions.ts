@@ -26,6 +26,7 @@ import {
 } from "@/db/schema";
 
 import { generateAnalyticsSnapshots, generateSessionCsv } from "./analytics";
+import { generateQuestionsWithAi } from "./ai-generate";
 import { QuizApiError, requireAdmin } from "./auth";
 import { broadcastSessionEvent } from "./realtime";
 import { calculateScore } from "./scoring";
@@ -45,6 +46,7 @@ import type {
   CreateEventInput,
   CreateQuestionInput,
   CreateSessionInput,
+  GenerateQuestionsInput,
   JoinSessionInput,
   PublishEventInput,
   SubmitAnswerInput,
@@ -421,6 +423,66 @@ export async function createQuizQuestion(
     }
     throw error;
   }
+}
+
+export async function generateQuizQuestionsWithAi(
+  eventId: string,
+  input: GenerateQuestionsInput,
+) {
+  const admin = await requireAdmin();
+  const event = await getOwnedEvent(admin.id, eventId);
+  if (!event) {
+    throw new QuizApiError("EVENT_NOT_FOUND", "Event not found.", 404);
+  }
+
+  try {
+    const questions = await generateQuestionsWithAi(input);
+    return { questions };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to generate questions.";
+    throw new QuizApiError("AI_GENERATION_FAILED", message, 502);
+  }
+}
+
+export async function bulkCreateQuizQuestions(
+  eventId: string,
+  questions: CreateQuestionInput[],
+) {
+  const admin = await requireAdmin();
+  const event = await getOwnedEvent(admin.id, eventId);
+  if (!event) {
+    throw new QuizApiError("EVENT_NOT_FOUND", "Event not found.", 404);
+  }
+
+  const maxRow = await db.query.quizQuestion.findFirst({
+    where: eq(quizQuestion.eventId, eventId),
+    orderBy: desc(quizQuestion.position),
+    columns: { position: true },
+  });
+  let nextPosition = maxRow ? maxRow.position + 1 : 1;
+
+  const created = [];
+  try {
+    for (const data of questions) {
+      const { question, answerOptions } = await insertQuestionWithOptions(
+        eventId,
+        data,
+        nextPosition++,
+      );
+      created.push({
+        question: serializeQuizQuestion(question),
+        answer_options: answerOptions.map(serializeQuizAnswerOption),
+      });
+    }
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new QuizApiError("CREATE_FAILED", "Failed to create questions.", 500);
+    }
+    throw error;
+  }
+
+  return { questions: created, count: created.length };
 }
 
 export async function getQuizQuestion(eventId: string, questionId: string) {

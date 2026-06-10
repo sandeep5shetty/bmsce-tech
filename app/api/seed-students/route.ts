@@ -4,14 +4,13 @@ import { sql } from "drizzle-orm";
 
 import db from "@/db";
 import { student } from "@/db/schema";
-import { STUDENTS_SEED } from "@/db/students-data";
+import { SECTION_B_STUDENTS } from "@/lib/students/section-b-roster";
 
 export async function POST() {
   try {
-    await db
-      .insert(student)
-      .values(STUDENTS_SEED)
-      .onConflictDoNothing();
+    // Replace entire roster so old USN formats are removed
+    await db.delete(student);
+    await db.insert(student).values(SECTION_B_STUDENTS);
 
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)` })
@@ -19,7 +18,7 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
-      message: `Seed complete. Total students in DB: ${count}`,
+      message: `Roster updated. ${SECTION_B_STUDENTS.length} Section B students loaded (${count} total in DB).`,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Seed failed";

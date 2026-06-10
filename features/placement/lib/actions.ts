@@ -6,6 +6,8 @@ import { and, asc, count, desc, eq } from "drizzle-orm";
 
 import { getUser } from "@/actions/user";
 
+import { isMcaStudentEmail } from "@/lib/bmsce-email";
+
 import db from "@/db";
 import { placementEmailMap } from "@/db/placement-email-map";
 import {
@@ -263,7 +265,7 @@ export async function upsertProfileByCoordinator(
 // Finds their USN via the email map, reads the academic record, and creates their profile.
 export async function tryAutoSeedProfile(): Promise<boolean> {
   const currentUser = await getUser();
-  if (!currentUser || !currentUser.email.endsWith("@bmsce.ac.in")) return false;
+  if (!currentUser || !isMcaStudentEmail(currentUser.email)) return false;
 
   // Check if a profile already exists
   const existing = await db.query.placementStudentProfile.findFirst({

@@ -106,6 +106,19 @@
   --animate-spotlight: spotlight 2s ease 0.75s 1 forwards;
 }
 
+/* Keeps admin quiz controls on the site primary palette even inside event-themed areas. */
+.site-theme {
+  --primary: oklch(69.205% 0.15962 240.403);
+  --primary-foreground: oklch(1 0 0);
+  --ring: oklch(0.705 0.015 286.067);
+}
+
+.dark .site-theme {
+  --primary: oklch(0.685 0.169 237.323);
+  --primary-foreground: oklch(0 0);
+  --ring: oklch(0.37 0.013 285.805);
+}
+
 :root {
   --radius: 0.85rem;
   --background: oklch(1 0 0);

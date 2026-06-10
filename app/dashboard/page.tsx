@@ -1,7 +1,7 @@
-import { ListsGrid } from "@/features/lists/components";
+import { FeatureHub } from "@/features/dashboard/components/feature-hub";
 
-const Lists = () => {
-  return <ListsGrid />;
+const DashboardPage = () => {
+  return <FeatureHub />;
 };
 
-export default Lists;
+export default DashboardPage;

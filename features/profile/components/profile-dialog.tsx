@@ -26,9 +26,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-import { useUploadThing } from "@/lib/upload";
-
-import { updateUserProfile } from "@/actions/user";
+import { updateUserProfile, uploadProfilePicture } from "@/actions/user";
 
 import {
   Edit,
@@ -40,6 +38,7 @@ import {
   PeerList,
   X as Twitter,
 } from "@/components/icons";
+import { resolveProfileImageSrc } from "@/lib/s3/profile-image";
 import { User } from "@/types";
 
 import { EditProfile } from "../lib/types";
@@ -59,40 +58,50 @@ export function ProfileDialog({
 }: ProfileDialogProps) {
   const queryClient = useQueryClient();
   const [profilePicFile, setProfilePicFile] = useState<File | null>(null);
-  const { startUpload } = useUploadThing("profilePicUploader", {
-    onUploadError: (error: Error) => {
-      toast.error(`Upload failed: ${error.message}`);
-    },
-  });
 
   const mutation = useMutation({
     mutationFn: async ({ value }: { value: EditProfile }) => {
+      const payload = { ...value };
+
       if (profilePicFile) {
-        const res = await startUpload([profilePicFile]);
-        value.image = res?.[0].ufsUrl;
+        const formData = new FormData();
+        formData.append("file", profilePicFile);
+        const uploadResult = await uploadProfilePicture(formData);
+
+        if (!uploadResult.success) {
+          throw new Error(uploadResult.error);
+        }
+
+        payload.image = uploadResult.url;
       }
 
-      await updateUserProfile(value);
+      const result = await updateUserProfile(payload);
+      if (!result.success) {
+        throw new Error(result.error ?? "Failed to update profile");
+      }
+
+      return payload;
     },
     onMutate: async ({ value }) => {
-      // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: ["user"] });
 
-      // Snapshot the previous value
       const previousUser = queryClient.getQueryData<User>(["user"]);
 
-      // Optimistically update to the new value
       if (previousUser) {
         queryClient.setQueryData<User>(["user"], {
           ...previousUser,
           ...value,
+          image: value.image || previousUser.image,
         });
       }
 
-      // Return a context object with the snapshotted value
       return { previousUser };
     },
-    onSuccess: () => {
+    onSuccess: (updatedProfile) => {
+      queryClient.setQueryData<User>(["user"], (current) =>
+        current ? { ...current, ...updatedProfile } : current,
+      );
+      setProfilePicFile(null);
       toast.success("Profile updated successfully!");
       onOpenChange(false);
     },
@@ -185,7 +194,11 @@ export function ProfileDialog({
                     <input {...getInputProps()} />
                     <Avatar className="bg-muted h-20 w-20">
                       <AvatarImage
-                        src={field.state.value || user.image || ""}
+                        key={field.state.value || user.image || "avatar"}
+                        src={resolveProfileImageSrc(
+                          field.state.value || user.image,
+                          user.updatedAt,
+                        )}
                         alt={user.name || "Profile pic"}
                       />
                       <AvatarFallback className="text-lg">

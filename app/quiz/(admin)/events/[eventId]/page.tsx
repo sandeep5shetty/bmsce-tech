@@ -5,12 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 import { PastSessions } from "@/features/quiz/components/past-sessions";
+import { AiQuestionGenerator } from "@/features/quiz/components/ai-question-generator";
 import { PublishPanel } from "@/features/quiz/components/publish-panel";
 import { QuestionList } from "@/features/quiz/components/question-list";
 import type { Question } from "@/features/quiz/components/question-card";
 import { quizApiFetch } from "@/features/quiz/lib/server-fetch";
 import {
-  buildThemeStyle,
   resolveGradient,
   type CustomTheme,
 } from "@/features/quiz/lib/themes";
@@ -52,14 +52,10 @@ export default async function QuizEventPage({ params }: PageProps) {
     themeId: event.theme_id as string | null,
     customTheme: event.custom_theme as CustomTheme | null,
   };
-  const themeStyle = buildThemeStyle(themeInput);
   const gradient = resolveGradient(themeInput);
 
   return (
-    <div
-      style={themeStyle}
-      className="container mx-auto mt-8 mb-32 max-w-6xl space-y-6 px-6"
-    >
+    <div className="container mx-auto mt-6 mb-32 max-w-6xl space-y-6 px-4 sm:mt-8 sm:px-6">
       <div>
         <Link
           href="/quiz"
@@ -107,7 +103,7 @@ export default async function QuizEventPage({ params }: PageProps) {
 
         <div className="min-w-0 space-y-8">
           <section className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="font-serif text-lg font-semibold">
                 Questions
                 {questionList.length > 0 && (
@@ -117,11 +113,14 @@ export default async function QuizEventPage({ params }: PageProps) {
                 )}
               </h2>
 
-              <Button size="sm" asChild>
-                <Link href={`/quiz/events/${eventId}/questions/new`}>
-                  Add Question
-                </Link>
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <AiQuestionGenerator eventId={eventId} />
+                <Button size="sm" asChild>
+                  <Link href={`/quiz/events/${eventId}/questions/new`}>
+                    Add Question
+                  </Link>
+                </Button>
+              </div>
             </div>
 
             <QuestionList questions={questionList} eventId={eventId} />

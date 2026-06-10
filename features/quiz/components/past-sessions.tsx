@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 
+import { ConfirmActionDialog } from "@/features/quiz/components/confirm-action-dialog";
+
 export interface PastSession {
   id: string;
   ended_at: string | null;
@@ -23,13 +25,9 @@ interface PastSessionsProps {
 export function PastSessions({ eventId, sessions }: PastSessionsProps) {
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   async function handleDelete(sessionId: string) {
-    if (
-      !confirm("Delete this session and its analytics? This cannot be undone.")
-    ) {
-      return;
-    }
     setDeletingId(sessionId);
     try {
       const res = await fetch(`/api/quiz/v1/analytics/${sessionId}`, {
@@ -41,6 +39,7 @@ export function PastSessions({ eventId, sessions }: PastSessionsProps) {
         return;
       }
       toast.success("Session deleted");
+      setPendingDeleteId(null);
       router.refresh();
     } catch {
       toast.error("An unexpected error occurred. Please try again.");
@@ -52,7 +51,22 @@ export function PastSessions({ eventId, sessions }: PastSessionsProps) {
   if (sessions.length === 0) return null;
 
   return (
-    <div className="bg-card divide-y rounded-lg border">
+    <>
+      <ConfirmActionDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null);
+        }}
+        title="Delete session?"
+        description="This will permanently delete the session and all of its analytics. This action cannot be undone."
+        confirmLabel="Delete Session"
+        onConfirm={() => {
+          if (pendingDeleteId) return handleDelete(pendingDeleteId);
+        }}
+        loading={deletingId !== null}
+        destructive
+      />
+      <div className="bg-card divide-y rounded-lg border">
       {sessions.map((session, i) => {
         const endedAt = session.ended_at
           ? new Date(session.ended_at).toLocaleString(undefined, {
@@ -80,7 +94,7 @@ export function PastSessions({ eventId, sessions }: PastSessionsProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleDelete(session.id)}
+                onClick={() => setPendingDeleteId(session.id)}
                 disabled={deleting}
                 className="text-destructive hover:bg-destructive/10 border-destructive/30"
                 aria-label={`Delete session ${sessions.length - i}`}
@@ -96,5 +110,6 @@ export function PastSessions({ eventId, sessions }: PastSessionsProps) {
         );
       })}
     </div>
+    </>
   );
 }

@@ -24,6 +24,8 @@ import { Separator } from "@/components/ui/separator";
 
 import { signIn, signInSocial } from "@/actions/auth";
 
+import { resolveAuthErrorMessage } from "@/lib/auth-errors";
+
 import { SignInSchema } from "@/types/auth";
 
 import { signInSchema } from "@/validation/auth";
@@ -41,6 +43,10 @@ const Login = () => {
   const router = useBProgressRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
+  const oauthError = resolveAuthErrorMessage(
+    searchParams.get("error"),
+    searchParams.get("error_description"),
+  );
   const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
 
@@ -79,18 +85,27 @@ const Login = () => {
   };
 
   return (
-    <div className="bg-background my-32 flex items-center justify-center px-4">
+    <div className="bg-background my-16 flex items-center justify-center px-4 sm:my-32">
       <div className="flex w-full flex-col items-center gap-4">
         <div className="text-center">
-          <h1 className="text-muted-foreground font-serif text-4xl">
+          <h1 className="text-muted-foreground font-serif text-3xl sm:text-4xl">
             Welcome back!
           </h1>
-          <p className="text-foreground font-serif text-5xl">
+          <p className="text-foreground font-serif text-3xl sm:text-5xl">
             Login to your account.
           </p>
+          <p className="text-muted-foreground mt-2 max-w-md text-sm">
+            Only official BMSCE emails are accepted.
+          </p>
         </div>
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md lg:mt-6">
           <CardContent className="space-y-4">
+            {oauthError && (
+              <div className="border-destructive/20 bg-destructive/10 rounded-lg border p-4">
+                <p className="text-destructive text-sm">{oauthError}</p>
+              </div>
+            )}
+
             {error && (
               <div className="border-destructive/20 bg-destructive/10 rounded-lg border p-4">
                 <p className="text-destructive text-sm">{error.message}</p>
@@ -117,7 +132,7 @@ const Login = () => {
                       <InputGroupInput
                         id="email"
                         type="email"
-                        placeholder="yourname@bmsce.ac.in"
+                        placeholder="yourname.branch@bmsce.ac.in"
                         value={field.state.value}
                         onChange={(e) => field.handleChange(e.target.value)}
                         disabled={isPending}
@@ -222,15 +237,6 @@ const Login = () => {
               </Link>
             </div>
 
-            <div className="text-center text-sm">
-              <span className="text-muted-foreground">MCA student? </span>
-              <Link
-                href="/auth/student-login"
-                className="text-primary font-medium hover:underline"
-              >
-                Sign in with USN
-              </Link>
-            </div>
           </CardContent>
         </Card>
       </div>

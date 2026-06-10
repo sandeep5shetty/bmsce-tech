@@ -1,5 +1,7 @@
 import z from "zod";
 
+import { BMSCE_EMAIL_ERROR, isBmsceEmail } from "@/lib/bmsce-email";
+
 export const password = z
   .string()
   .min(8, "Password must be at least 8 characters long")
@@ -11,8 +13,12 @@ export const password = z
     },
   );
 
+const bmsceEmail = z
+  .email("Please enter a valid email address")
+  .refine((value) => isBmsceEmail(value), { message: BMSCE_EMAIL_ERROR });
+
 export const signInSchema = z.object({
-  email: z.email("Please enter a valid email address"),
+  email: bmsceEmail,
   password: password,
 });
 
@@ -21,7 +27,7 @@ export const signUpSchema = z.object({
     .string()
     .min(2, "Name must be at least 2 characters long.")
     .max(50, "Name must not exceed 50 characters"),
-  email: z.email("Please enter a valid email address"),
+  email: bmsceEmail,
   password: password,
 });
 
@@ -31,7 +37,7 @@ export const signUpWithConfirmSchema = z
       .string()
       .min(2, "Name must be at least 2 characters long.")
       .max(50, "Name must not exceed 50 characters"),
-    email: z.email("Please enter a valid email address"),
+    email: bmsceEmail,
     password: password,
     confirmPassword: z.string(),
   })

@@ -14,12 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { EmptyAddCard } from "@/components/common/empty-add-card";
 import {
   Table,
   TableBody,
@@ -164,18 +159,11 @@ export function ProfilesManager({ initialProfiles, users }: ProfilesManagerProps
       </p>
 
       {profiles.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No profiles yet</EmptyTitle>
-            <EmptyDescription>
-              Add profiles manually or upload a CSV to enable eligibility checks.
-            </EmptyDescription>
-          </EmptyHeader>
-          <Button onClick={handleAdd}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            Add Profile
-          </Button>
-        </Empty>
+        <EmptyAddCard
+          title="Add Profile"
+          description="Add profiles manually or upload a CSV to enable eligibility checks."
+          onClick={handleAdd}
+        />
       ) : (
         <Card>
           <CardHeader className="pb-2">

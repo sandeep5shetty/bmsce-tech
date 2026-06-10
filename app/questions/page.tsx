@@ -20,12 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { EmptyAddCard } from "@/components/common/empty-add-card";
 import { Separator } from "@/components/ui/separator";
 import {
   Table,
@@ -175,17 +170,11 @@ export default function QuestionsPage() {
           </Card>
         </div>
       ) : questions.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No questions yet</EmptyTitle>
-            <EmptyDescription>
-              Create your first question and share the link.
-            </EmptyDescription>
-          </EmptyHeader>
-          <Button asChild>
-            <Link href="/questions/create">Create Question</Link>
-          </Button>
-        </Empty>
+        <EmptyAddCard
+          title="Create Question"
+          description="Create your first question and share the link."
+          href="/questions/create"
+        />
       ) : (
         <div className="grid gap-4">
           {questions.map((q) => (

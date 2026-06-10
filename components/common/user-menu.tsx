@@ -20,6 +20,7 @@ import { ProfileDialog } from "@/features/profile/components/profile-dialog";
 import { logout } from "@/actions/auth";
 
 import { Loader } from "@/components/icons";
+import { resolveProfileImageSrc } from "@/lib/s3/profile-image";
 import { User as UserType } from "@/types";
 
 import { Logout, User } from "../icons";
@@ -55,6 +56,8 @@ export function UserMenu({ user }: UserMenuProps) {
       .join("")
       .toUpperCase() || user.email[0].toUpperCase();
 
+  const profileImageSrc = resolveProfileImageSrc(user.image, user.updatedAt);
+
   return (
     <>
       <ProfileDialog
@@ -70,20 +73,33 @@ export function UserMenu({ user }: UserMenuProps) {
             aria-label="User menu"
           >
             <Avatar className="h-10 w-10">
-              <AvatarImage src={user.image || ""} alt={user.name || ""} />
+              <AvatarImage
+                key={profileImageSrc}
+                src={profileImageSrc}
+                alt={user.name || ""}
+              />
               <AvatarFallback className="text-sm">{initials}</AvatarFallback>
             </Avatar>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-64 p-0" align="end">
+        <PopoverContent className="w-72 p-0" align="end">
           <div className="flex items-center gap-3 p-4">
-            <Avatar className="h-12 w-12">
-              <AvatarImage src={user.image || ""} alt={user.name || ""} />
+            <Avatar className="h-12 w-12 shrink-0">
+              <AvatarImage
+                key={profileImageSrc}
+                src={profileImageSrc}
+                alt={user.name || ""}
+              />
               <AvatarFallback>{initials}</AvatarFallback>
             </Avatar>
-            <div className="flex flex-col space-y-1">
-              <p className="text-sm leading-none font-medium">{user.name}</p>
-              <p className="text-muted-foreground text-xs">{user.email}</p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm leading-none font-medium">{user.name}</p>
+              <p
+                className="text-muted-foreground truncate text-xs"
+                title={user.email}
+              >
+                {user.email}
+              </p>
             </div>
           </div>
           <Separator />

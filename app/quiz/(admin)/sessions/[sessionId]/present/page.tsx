@@ -5,9 +5,13 @@ import { useParams, useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createClient } from "@/features/quiz/lib/supabase-client"
 import { QRCodeDisplay } from "@/features/quiz/components/qr-code-display"
+import { ConfirmActionDialog } from "@/features/quiz/components/confirm-action-dialog"
+import { QuizAdminToolbarPortal } from "@/features/quiz/components/quiz-admin-toolbar-portal"
+import { SessionControlBar } from "@/features/quiz/components/session-control-bar"
 import { LoadingScreen } from "@/components/ui/loading-screen"
+import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { buildThemeStyle, type CustomTheme } from "@/features/quiz/lib/themes"
+import type { CustomTheme } from "@/features/quiz/lib/themes"
 
 interface Participant {
   participantId: string
@@ -106,6 +110,8 @@ export default function PresentPage() {
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardUpdatedPayload | null>(null)
   const [wordCloudData, setWordCloudData] = useState<Array<{ word: string; count: number }>>([])
   const [advancing, setAdvancing] = useState(false)
+  const [endingSession, setEndingSession] = useState(false)
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false)
 
   // Guards so auto-advance fires at most once per state transition
   const autoAdvancedQuestionIdRef = useRef<string | null>(null)
@@ -133,27 +139,6 @@ export default function PresentPage() {
       })
       .catch(() => setLoadError("Network error. Please refresh the page."))
   }, [sessionId])
-
-  // Apply the event's colour theme to this full-screen route by overriding the
-  // theme CSS variables on the document root. Restores the previous values on
-  // unmount so the theme stays scoped to the presenter screen.
-  const themeId = session?.events?.theme_id ?? null
-  const customTheme = session?.events?.custom_theme ?? null
-  useEffect(() => {
-    const style = buildThemeStyle({ themeId, customTheme })
-    const root = document.documentElement
-    const previous: Record<string, string> = {}
-    for (const [key, value] of Object.entries(style)) {
-      previous[key] = root.style.getPropertyValue(key)
-      root.style.setProperty(key, String(value))
-    }
-    return () => {
-      for (const key of Object.keys(style)) {
-        if (previous[key]) root.style.setProperty(key, previous[key])
-        else root.style.removeProperty(key)
-      }
-    }
-  }, [themeId, customTheme])
 
   // Subscribe to Realtime Presence + Broadcast
   useEffect(() => {
@@ -409,8 +394,8 @@ export default function PresentPage() {
     }
   }, [sessionId])
 
-  const handleEndSession = useCallback(async () => {
-    if (!confirm("Are you sure you want to end this session?")) return
+  const performEndSession = useCallback(async () => {
+    setEndingSession(true)
     try {
       const res = await fetch(`/api/quiz/v1/sessions/${sessionId}`, { method: "DELETE" })
       if (!res.ok) {
@@ -421,11 +406,14 @@ export default function PresentPage() {
         return
       }
       toast.success("Session ended")
+      setEndConfirmOpen(false)
       router.push("/quiz")
     } catch {
       const msg = "Failed to end session."
       setStartError(msg)
       toast.error(msg)
+    } finally {
+      setEndingSession(false)
     }
   }, [sessionId, router])
 
@@ -443,10 +431,7 @@ export default function PresentPage() {
           <div className="text-4xl" aria-hidden="true">⚠️</div>
           <h1 className="text-xl font-bold">Failed to Load Session</h1>
           <p className="text-muted-foreground text-sm">{loadError}</p>
-          <button onClick={() => router.push("/quiz")}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition">
-            Back to Dashboard
-          </button>
+          <Button onClick={() => router.push("/quiz")}>Back to Dashboard</Button>
         </div>
       </div>
     )
@@ -465,40 +450,84 @@ export default function PresentPage() {
     )
   }
 
-  // Determine total number of questions and where we are, for "Next" labels
   const totalQuestionsCount = session?.events?.questions?.length ?? 0
   const currentIdx = session?.current_question_index ?? -1
   const isLastQuestion = currentIdx >= 0 && currentIdx >= totalQuestionsCount - 1
+
+  const showSessionControls = [
+    "lobby",
+    "question",
+    "results",
+    "leaderboard",
+    "final_leaderboard",
+  ].includes(sessionStatus)
+
+  const showNextControl = ["question", "results", "leaderboard"].includes(sessionStatus)
+
+  const nextControlLabel =
+    sessionStatus === "question"
+      ? "Reveal Results"
+      : sessionStatus === "results"
+        ? "Show Leaderboard"
+        : isLastQuestion
+          ? "Show Final Results"
+          : "Next Question"
+
+  const sessionControlBar = showSessionControls ? (
+    <QuizAdminToolbarPortal>
+      <SessionControlBar
+        onNext={showNextControl ? handleAdvance : undefined}
+        onEnd={() => setEndConfirmOpen(true)}
+        advancing={advancing}
+        ending={endingSession}
+        error={startError}
+        showNext={showNextControl}
+        showEnd
+        nextLabel={nextControlLabel}
+        compact
+      />
+    </QuizAdminToolbarPortal>
+  ) : null
+
+  const endSessionDialog = (
+    <ConfirmActionDialog
+      open={endConfirmOpen}
+      onOpenChange={setEndConfirmOpen}
+      title="End session?"
+      description="This will stop the live quiz for all participants. You can review analytics afterward, but the session cannot be resumed."
+      confirmLabel="End Session"
+      onConfirm={performEndSession}
+      loading={endingSession}
+      destructive
+    />
+  )
 
   // ── Question ───────────────────────────────────────────────────────────────
   if (sessionStatus === "question" && currentQuestion) {
     const isOpenText = currentQuestion.question_type === "open_text"
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <PresenterQuestionView
-          question={currentQuestion}
-          questionStartedAt={questionStartedAt}
-          answeredCount={answeredCount}
-          totalParticipants={totalParticipants}
-          questionNumber={currentIdx + 1}
-          totalQuestions={totalQuestionsCount}
-        />
-        {isOpenText && (
-          <div className="max-w-3xl mx-auto w-full px-6 pb-4">
-            <div className="rounded-xl border bg-card p-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Live Word Cloud</p>
-              <WordCloudView words={wordCloudData} />
+      <>
+        {endSessionDialog}
+        {sessionControlBar}
+        <div className="flex min-h-full flex-col bg-background">
+          <PresenterQuestionView
+            question={currentQuestion}
+            questionStartedAt={questionStartedAt}
+            answeredCount={answeredCount}
+            totalParticipants={totalParticipants}
+            questionNumber={currentIdx + 1}
+            totalQuestions={totalQuestionsCount}
+          />
+          {isOpenText && (
+            <div className="max-w-3xl mx-auto w-full px-6 pb-4">
+              <div className="rounded-xl border bg-card p-4">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Live Word Cloud</p>
+                <WordCloudView words={wordCloudData} />
+              </div>
             </div>
-          </div>
-        )}
-        <SessionControls
-          onNext={handleAdvance}
-          advancing={advancing}
-          error={startError}
-          showNext
-          nextLabel="Reveal Results →"
-        />
-      </div>
+          )}
+        </div>
+      </>
     )
   }
 
@@ -506,59 +535,59 @@ export default function PresentPage() {
   if (sessionStatus === "results") {
     if (!resultsData) {
       return (
-        <div className="min-h-screen flex flex-col bg-background">
-          <div className="flex-1">
+        <>
+          {endSessionDialog}
+          {sessionControlBar}
+          <div className="flex min-h-full flex-col bg-background">
             <LoadingScreen variant="section" label="Loading results…" emoji="📊" />
           </div>
-          <SessionControls onNext={handleAdvance} advancing={advancing} error={startError} showNext nextLabel="Show Leaderboard →" />
-        </div>
+        </>
       )
     }
     const questions = session.events?.questions ?? []
     const q = questions.find((q) => q.id === resultsData.questionId)
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <ResultsView resultsData={resultsData} question={q ?? null} />
-        <SessionControls onNext={handleAdvance} advancing={advancing} error={startError} showNext nextLabel="Show Leaderboard →" />
-      </div>
+      <>
+        {endSessionDialog}
+        {sessionControlBar}
+        <div className="flex min-h-full flex-col bg-background">
+          <ResultsView resultsData={resultsData} question={q ?? null} />
+        </div>
+      </>
     )
   }
 
   // ── Leaderboard ────────────────────────────────────────────────────────────
   if (sessionStatus === "leaderboard") {
     if (!leaderboardData) {
-      // Status arrived (via local fallback) but broadcast hasn't yet — show a brief loader
       return <LoadingScreen label="Loading leaderboard…" emoji="🏆" />
     }
-    const nextLabel = isLastQuestion ? "Show Final Results →" : "Next Question →"
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <LeaderboardView entries={leaderboardData.entries.slice(0, 10)} isFinal={false} />
-        <SessionControls onNext={handleAdvance} advancing={advancing} error={startError} showNext nextLabel={nextLabel} />
-      </div>
+      <>
+        {endSessionDialog}
+        {sessionControlBar}
+        <div className="flex min-h-full flex-col bg-background">
+          <LeaderboardView entries={leaderboardData.entries.slice(0, 10)} isFinal={false} />
+        </div>
+      </>
     )
   }
 
-  // ── Final Leaderboard ──────────────────────────────────────────────────────
   if (sessionStatus === "final_leaderboard") {
     if (!leaderboardData) {
       return <LoadingScreen label="Loading final results…" emoji="🏆" />
     }
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <FinalLeaderboardView entries={leaderboardData.entries} />
-        <SessionControls
-          onNext={undefined}
-          onEnd={handleEndSession}
-          advancing={advancing}
-          error={startError}
-          showEnd
-        />
-      </div>
+      <>
+        {endSessionDialog}
+        {sessionControlBar}
+        <div className="flex min-h-full flex-col bg-background">
+          <FinalLeaderboardView entries={leaderboardData.entries} />
+        </div>
+      </>
     )
   }
 
-  // ── Ended ──────────────────────────────────────────────────────────────────
   if (sessionStatus === "ended") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
@@ -567,26 +596,26 @@ export default function PresentPage() {
           <h1 className="text-2xl font-bold">Session Ended</h1>
           <p className="text-muted-foreground">Thanks for playing!</p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <a
-              href={`/quiz/events/${session.event_id}/analytics/${sessionId}`}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition"
-            >
-              View Analytics
-            </a>
-            <button onClick={() => router.push("/quiz")}
-              className="rounded-md border px-4 py-2 text-sm font-semibold hover:bg-muted transition">
+            <Button asChild className="site-theme">
+              <a href={`/quiz/events/${session.event_id}/analytics/${sessionId}`}>
+                View Analytics
+              </a>
+            </Button>
+            <Button variant="outline" onClick={() => router.push("/quiz")}>
               Back to Dashboard
-            </button>
+            </Button>
           </div>
         </div>
       </div>
     )
   }
 
-  // ── Lobby (default) ────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+    <>
+      {endSessionDialog}
+      {sessionControlBar}
+      <div className="flex min-h-full flex-col bg-background">
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-8 w-full">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{session.events?.title ?? "Session"}</h1>
@@ -614,8 +643,12 @@ export default function PresentPage() {
             )}
             <div className="space-y-2">
               {startError && <p role="alert" className="text-sm text-destructive text-center">{startError}</p>}
-              <button onClick={handleStartQuiz} disabled={participantCount === 0 || advancing} aria-disabled={participantCount === 0 || advancing}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-4 text-base font-bold text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition">
+              <Button
+                onClick={handleStartQuiz}
+                disabled={participantCount === 0 || advancing}
+                className="site-theme h-auto w-full rounded-xl px-6 py-4 text-base font-bold"
+                aria-disabled={participantCount === 0 || advancing}
+              >
                 {advancing ? (
                   <>
                     <Spinner size="sm" className="text-primary-foreground" />
@@ -624,7 +657,7 @@ export default function PresentPage() {
                 ) : (
                   "Start Quiz"
                 )}
-              </button>
+              </Button>
               {participantCount === 0 && <p className="text-xs text-muted-foreground text-center" role="status">Waiting for at least 1 participant to join</p>}
             </div>
           </div>
@@ -652,6 +685,7 @@ export default function PresentPage() {
         </div>
       </div>
     </div>
+    </>
   )
 }
 
@@ -931,51 +965,6 @@ function WordCloudView({ words }: { words: Array<{ word: string; count: number }
           </span>
         )
       })}
-    </div>
-  )
-}
-
-function SessionControls({
-  onNext,
-  onEnd,
-  advancing,
-  error,
-  showNext,
-  showEnd,
-  nextLabel,
-}: {
-  onNext?: () => void
-  onEnd?: () => void
-  advancing: boolean
-  error: string | null
-  showNext?: boolean
-  showEnd?: boolean
-  nextLabel?: string
-}) {
-  return (
-    <div className="sticky bottom-0 border-t bg-background/95 backdrop-blur px-6 py-4">
-      {error && <p role="alert" className="text-sm text-destructive text-center mb-2">{error}</p>}
-      <div className="flex justify-end gap-3 max-w-3xl mx-auto">
-        {showNext && onNext && (
-          <button onClick={onNext} disabled={advancing}
-            className="flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition">
-            {advancing ? (
-              <>
-                <Spinner size="sm" className="text-primary-foreground" />
-                Loading…
-              </>
-            ) : (
-              nextLabel ?? "Next →"
-            )}
-          </button>
-        )}
-        {showEnd && onEnd && (
-          <button onClick={onEnd}
-            className="rounded-xl bg-destructive px-6 py-3 text-sm font-bold text-destructive-foreground hover:bg-destructive/90 transition">
-            End Session
-          </button>
-        )}
-      </div>
     </div>
   )
 }

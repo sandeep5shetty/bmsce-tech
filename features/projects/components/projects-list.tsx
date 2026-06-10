@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { EmptyAddCard } from "@/components/common/empty-add-card";
 import {
   Empty,
   EmptyDescription,
@@ -402,21 +403,14 @@ const ProjectsList = ({
   // Empty state
   if (projects.length === 0) {
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <FolderCode className="text-muted-foreground" />
-          </EmptyMedia>
-          <EmptyTitle>
-            {search ? "No projects found" : "No projects yet"}
-          </EmptyTitle>
-          <EmptyDescription>
-            {search
-              ? "Try adjusting your search terms"
-              : "Be the first to submit a project to this list"}
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      <EmptyAddCard
+        title={search ? "No projects found" : "No projects yet"}
+        description={
+          search
+            ? "Try adjusting your search terms"
+            : "Be the first to submit a project to this list"
+        }
+      />
     );
   }
 

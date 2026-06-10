@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
+import { ConfirmActionDialog } from "@/features/quiz/components/confirm-action-dialog";
+
 export type QuestionType =
   | "single_select"
   | "multi_select"
@@ -70,10 +72,9 @@ const QUESTION_TYPE_VARIANTS: Record<
 export function QuestionCard({ question, eventId }: QuestionCardProps) {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   async function handleDelete() {
-    if (!confirm("Delete this question? This cannot be undone.")) return;
-
     setDeleting(true);
 
     try {
@@ -84,6 +85,7 @@ export function QuestionCard({ question, eventId }: QuestionCardProps) {
 
       if (res.status === 204) {
         toast.success("Question deleted");
+        setDeleteConfirmOpen(false);
         router.refresh();
         return;
       }
@@ -101,7 +103,18 @@ export function QuestionCard({ question, eventId }: QuestionCardProps) {
   const typeVariant = QUESTION_TYPE_VARIANTS[question.question_type];
 
   return (
-    <Card className="group">
+    <>
+      <ConfirmActionDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="Delete question?"
+        description="This question will be permanently removed from the event. This action cannot be undone."
+        confirmLabel="Delete Question"
+        onConfirm={handleDelete}
+        loading={deleting}
+        destructive
+      />
+      <Card className="group">
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <div
@@ -148,7 +161,7 @@ export function QuestionCard({ question, eventId }: QuestionCardProps) {
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            <Button variant="ghost" size="icon-sm" asChild>
+            <Button variant="outline" size="icon-sm" asChild>
               <Link
                 href={`/quiz/events/${eventId}/questions/${question.id}`}
                 aria-label={`Edit question: ${question.text}`}
@@ -158,10 +171,10 @@ export function QuestionCard({ question, eventId }: QuestionCardProps) {
             </Button>
 
             <Button
-              variant="ghost"
+              variant="outline"
               size="icon-sm"
-              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-              onClick={handleDelete}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+              onClick={() => setDeleteConfirmOpen(true)}
               disabled={deleting}
               aria-label={`Delete question: ${question.text}`}
             >
@@ -171,5 +184,6 @@ export function QuestionCard({ question, eventId }: QuestionCardProps) {
         </div>
       </CardContent>
     </Card>
+    </>
   );
 }

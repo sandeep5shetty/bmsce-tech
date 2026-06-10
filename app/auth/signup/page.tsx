@@ -87,17 +87,18 @@ const SignUp = () => {
   };
 
   return (
-    <div className="bg-background my-32 flex items-center justify-center px-4">
+    <div className="bg-background my-16 flex items-center justify-center px-4 sm:my-32">
       <div className="flex w-full flex-col items-center gap-4">
         <div className="text-center">
           {/* <h1 className="text-muted-foreground font-serif text-4xl">
             Ready to start?
           </h1> */}
-          <h2 className="text-foreground font-serif text-5xl">
+          <h2 className="text-foreground font-serif text-3xl sm:text-5xl">
             Create your <span className="italic">account</span>.
           </h2>
-          <p className="text-muted-foreground mt-2 font-mono text-sm tracking-tight">
-            Use bmsce mail id&apos;s only.
+          <p className="text-muted-foreground mt-2 text-sm">
+            Only official BMSCE emails are
+            allowed.
           </p>
         </div>
         <Card className="w-full max-w-md">
@@ -157,7 +158,7 @@ const SignUp = () => {
                       <InputGroupInput
                         id="email"
                         type="email"
-                        placeholder="yourname@bmsce.ac.in"
+                        placeholder="yourname.branch@bmsce.ac.in"
                         value={field.state.value}
                         onChange={(e) => field.handleChange(e.target.value)}
                         disabled={isPending}

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { LoadingScreen } from "@/components/ui/loading-screen"
 import { Spinner } from "@/components/ui/spinner"
+import { ConfirmActionDialog } from "@/features/quiz/components/confirm-action-dialog"
 
 interface AnswerOption {
   id: string
@@ -63,6 +64,7 @@ export default function AnalyticsPage() {
   const [error, setError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
   useEffect(() => {
     fetch(`/api/quiz/v1/analytics/${sessionId}`)
@@ -100,9 +102,6 @@ export default function AnalyticsPage() {
   }
 
   const handleDelete = async () => {
-    if (!confirm("Delete this session and its analytics? This cannot be undone.")) {
-      return
-    }
     setDeleting(true)
     try {
       const res = await fetch(`/api/quiz/v1/analytics/${sessionId}`, { method: "DELETE" })
@@ -112,6 +111,7 @@ export default function AnalyticsPage() {
         return
       }
       toast.success("Session deleted")
+      setDeleteConfirmOpen(false)
       router.push(`/quiz/events/${eventId}`)
     } catch {
       toast.error("An unexpected error occurred. Please try again.")
@@ -141,11 +141,22 @@ export default function AnalyticsPage() {
   )
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+    <>
+      <ConfirmActionDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="Delete session?"
+        description="This will permanently delete the session and all of its analytics. This action cannot be undone."
+        confirmLabel="Delete Session"
+        onConfirm={handleDelete}
+        loading={deleting}
+        destructive
+      />
+      <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => router.push(`/quiz/events/${eventId}`)}>
+          <Button variant="outline" size="sm" onClick={() => router.push(`/quiz/events/${eventId}`)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
@@ -170,7 +181,7 @@ export default function AnalyticsPage() {
               </>
             )}
           </Button>
-          <Button onClick={handleDelete} disabled={deleting} variant="destructive">
+          <Button onClick={() => setDeleteConfirmOpen(true)} disabled={deleting} variant="destructive">
             {deleting ? (
               <>
                 <Spinner size="sm" className="text-destructive-foreground" />
@@ -271,5 +282,6 @@ export default function AnalyticsPage() {
         })
       )}
     </div>
+    </>
   )
 }

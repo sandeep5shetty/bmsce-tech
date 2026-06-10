@@ -179,6 +179,41 @@ export type AdvanceSessionInput = z.infer<typeof advanceSessionSchema>;
 export type JoinSessionInput = z.infer<typeof joinSessionSchema>;
 export type SubmitAnswerInput = z.infer<typeof submitAnswerSchema>;
 
+export const generateQuestionsSchema = z.object({
+  topic: z.string().trim().min(2, "Topic is required.").max(200),
+  count: z.number().int().min(1).max(20),
+  difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
+  question_type: z.enum(["single_select", "multi_select"]).default("single_select"),
+  time_limit: z.number().int().min(5).max(120).default(20),
+  additional_context: z.string().max(500).optional(),
+});
+
+export const aiGeneratedQuestionSchema = z.object({
+  text: z.string().trim().min(1).max(255),
+  question_type: z.enum(["single_select", "multi_select"]),
+  time_limit: z.number().int().min(5).max(120).optional(),
+  answer_options: z
+    .array(
+      z.object({
+        text: z.string().trim().min(1).max(120),
+        is_correct: z.boolean(),
+      }),
+    )
+    .length(4),
+});
+
+export const aiGeneratedQuestionsResponseSchema = z.object({
+  questions: z.array(aiGeneratedQuestionSchema).min(1),
+});
+
+export const bulkCreateQuestionsSchema = z.object({
+  questions: z.array(createQuestionSchema).min(1).max(20),
+});
+
+export type GenerateQuestionsInput = z.infer<typeof generateQuestionsSchema>;
+export type AiGeneratedQuestion = z.infer<typeof aiGeneratedQuestionSchema>;
+export type BulkCreateQuestionsInput = z.infer<typeof bulkCreateQuestionsSchema>;
+
 const displayNamePattern = new RegExp("^[\\p{L}\\p{N} \\-_]+$", "u");
 
 export function validateDisplayName(name: string): boolean {

@@ -14,6 +14,17 @@ const QUIZ_PUBLIC_PREFIXES = ["/quiz/join", "/quiz/play"];
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  if (pathname === "/api/auth/error") {
+    const loginUrl = new URL("/auth/login", request.url);
+    const error = request.nextUrl.searchParams.get("error");
+    const description = request.nextUrl.searchParams.get("error_description");
+
+    if (error) loginUrl.searchParams.set("error", error);
+    if (description) loginUrl.searchParams.set("error_description", description);
+
+    return NextResponse.redirect(loginUrl);
+  }
+
   const isQuizPublic = QUIZ_PUBLIC_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
@@ -42,6 +53,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/api/auth/error",
     "/placement/:path*",
     "/questions/:path*",
     "/random-picker/:path*",

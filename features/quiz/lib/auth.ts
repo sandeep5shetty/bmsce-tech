@@ -2,6 +2,8 @@ import { getUser } from "@/actions/user";
 
 import type { User } from "@/types";
 
+import { isQuizAdminEmail } from "./admins";
+
 export class QuizApiError extends Error {
   constructor(
     public code: string,
@@ -19,7 +21,18 @@ export async function requireAdmin(): Promise<User> {
   if (!user) {
     throw new QuizApiError("UNAUTHORIZED", "Authentication required.", 401);
   }
+  if (!isQuizAdminEmail(user.email)) {
+    throw new QuizApiError(
+      "FORBIDDEN",
+      "Only activity coordinators can manage quizzes.",
+      403,
+    );
+  }
   return user;
+}
+
+export function canManageQuiz(email: string | null | undefined): boolean {
+  return isQuizAdminEmail(email);
 }
 
 export function isQuizApiError(error: unknown): error is QuizApiError {

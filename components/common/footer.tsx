@@ -16,7 +16,7 @@ const Footer = () => {
           <RvyuFuzzy />
         </div>
 
-        <ul className="relative z-20 items-center gap-1 sm:flex">
+        <ul className="relative z-20 flex flex-col items-center gap-1 sm:flex-row">
           <li>
             <span className="text-muted-foreground hover:text-foreground cursor-pointer rounded-lg px-3 py-2 text-sm font-medium transition-colors">
               Copyright © BMSCE.tech All rights reserved.

@@ -34,6 +34,7 @@ import Lock from "./lock";
 import Login from "./login";
 import Logout from "./logout";
 import Mail from "./mail";
+import Menu from "./menu";
 import Moon from "./moon-2";
 import NoImage from "./no-image";
 import NoList from "./no-list";
@@ -95,6 +96,7 @@ export {
   Login,
   Logout,
   Mail,
+  Menu,
   Moon,
   NoList,
   NotFound,

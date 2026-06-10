@@ -13,12 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { EmptyAddCard } from "@/components/common/empty-add-card";
 
 import { CoordinatorSetup } from "@/features/placement/components/coordinator-setup";
 import { getAllDrives, tryAutoSeedProfile } from "@/features/placement/lib/actions";
@@ -67,21 +62,18 @@ export default async function PlacementPage() {
       </div>
 
       {drives.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No drives yet</EmptyTitle>
-            <EmptyDescription>
-              {isCoordinator
-                ? "Create your first placement drive to get started."
-                : "No drives are active right now. Check back later."}
-            </EmptyDescription>
-          </EmptyHeader>
-          {isCoordinator && (
-            <Button asChild>
-              <Link href="/placement/create">Create Drive</Link>
-            </Button>
-          )}
-        </Empty>
+        isCoordinator ? (
+          <EmptyAddCard
+            title="Create Drive"
+            description="Create your first placement drive to get started."
+            href="/placement/create"
+          />
+        ) : (
+          <EmptyAddCard
+            title="No drives yet"
+            description="No drives are active right now. Check back later."
+          />
+        )
       ) : (
         <div className="grid gap-4">
           {drives.map((drive) => {

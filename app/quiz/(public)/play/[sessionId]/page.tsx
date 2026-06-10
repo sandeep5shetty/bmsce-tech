@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/features/quiz/lib/supabase-client"
 import { LoadingScreen } from "@/components/ui/loading-screen"
-import { buildThemeStyle, type CustomTheme } from "@/features/quiz/lib/themes"
+import { buildParticipantThemeStyle, type CustomTheme } from "@/features/quiz/lib/themes"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
 interface SessionStatePayload {
@@ -135,7 +135,7 @@ export default function PlayPage() {
   // theme CSS variables on the document root. Restores the previous values on
   // unmount so the theme stays scoped to the play screen.
   useEffect(() => {
-    const style = buildThemeStyle({ themeId, customTheme })
+    const style = buildParticipantThemeStyle({ themeId, customTheme })
     const root = document.documentElement
     const previous: Record<string, string> = {}
     for (const [key, value] of Object.entries(style)) {

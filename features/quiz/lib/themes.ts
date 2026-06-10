@@ -184,12 +184,27 @@ export type ThemeCSSProperties = CSSProperties & {
   "--event-gradient"?: string;
 };
 
+export type EventDecorCSSProperties = CSSProperties & {
+  "--event-gradient"?: string;
+};
+
 export interface ThemeInput {
   themeId?: string | null;
   customTheme?: CustomTheme | null;
 }
 
-export function buildThemeStyle({
+/** Gradient-only style for banners and cards — does not override site `--primary`. */
+export function buildEventDecorStyle({
+  themeId,
+  customTheme,
+}: ThemeInput): EventDecorCSSProperties {
+  return {
+    "--event-gradient": resolveGradient({ themeId, customTheme }),
+  };
+}
+
+/** Full participant theme — overrides `--primary` for play screens only. */
+export function buildParticipantThemeStyle({
   themeId,
   customTheme,
 }: ThemeInput): ThemeCSSProperties {
@@ -206,11 +221,16 @@ export function buildThemeStyle({
   const gradient = customTheme?.gradient ?? theme.gradient;
 
   return {
-    "--primary": primaryHsl,
-    "--primary-foreground": primaryForegroundHsl,
-    "--ring": primaryHsl,
+    "--primary": `hsl(${primaryHsl})`,
+    "--primary-foreground": `hsl(${primaryForegroundHsl})`,
+    "--ring": `hsl(${primaryHsl})`,
     "--event-gradient": gradient,
   };
+}
+
+/** @deprecated Prefer {@link buildParticipantThemeStyle} or {@link buildEventDecorStyle}. */
+export function buildThemeStyle(input: ThemeInput): ThemeCSSProperties {
+  return buildParticipantThemeStyle(input);
 }
 
 export function resolvePrimaryHex({ themeId, customTheme }: ThemeInput): string {

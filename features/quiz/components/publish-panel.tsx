@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 
+import { ConfirmActionDialog } from "@/features/quiz/components/confirm-action-dialog";
 import { QRCodeDisplay } from "@/features/quiz/components/qr-code-display";
 
 interface PublishPanelProps {
@@ -32,6 +33,7 @@ export function PublishPanel({
   const [activeSessionId, setActiveSessionId] = useState<string | null | undefined>(
     initialActiveSessionId,
   );
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false);
 
   const joinUrl = joinCode
     ? `${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/quiz/join/${joinCode}`
@@ -114,8 +116,6 @@ export function PublishPanel({
 
   async function handleStopSession() {
     if (!activeSessionId) return;
-    if (!confirm("Are you sure you want to end this session? This cannot be undone."))
-      return;
     setStopLoading(true);
     try {
       const res = await fetch(`/api/quiz/v1/sessions/${activeSessionId}`, {
@@ -127,6 +127,7 @@ export function PublishPanel({
       } else {
         toast.success("Session ended");
         setActiveSessionId(null);
+        setEndConfirmOpen(false);
         router.refresh();
       }
     } catch {
@@ -147,7 +148,18 @@ export function PublishPanel({
   }
 
   return (
-    <Card>
+    <>
+      <ConfirmActionDialog
+        open={endConfirmOpen}
+        onOpenChange={setEndConfirmOpen}
+        title="End session?"
+        description="This will stop the live quiz for all participants. This action cannot be undone."
+        confirmLabel="End Session"
+        onConfirm={handleStopSession}
+        loading={stopLoading}
+        destructive
+      />
+      <Card>
       <CardHeader>
         <CardTitle className="font-serif text-lg">Publish</CardTitle>
       </CardHeader>
@@ -160,11 +172,11 @@ export function PublishPanel({
             <Button
               onClick={handlePublish}
               disabled={publishLoading}
-              className="bg-green-600 text-white hover:bg-green-700"
+              className="site-theme w-full sm:w-auto"
             >
               {publishLoading ? (
                 <>
-                  <Spinner size="sm" className="text-white" />
+                  <Spinner size="sm" className="text-primary-foreground" />
                   Publishing…
                 </>
               ) : (
@@ -230,25 +242,28 @@ export function PublishPanel({
             )}
 
             {activeSessionId && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
                 A session is already in progress.{" "}
-                <button
+                <Button
                   type="button"
+                  variant="link"
+                  className="h-auto p-0 text-amber-900 dark:text-amber-100"
                   onClick={handleResumeSession}
-                  className="font-semibold underline hover:no-underline"
                 >
                   Resume session →
-                </button>
+                </Button>
               </div>
             )}
 
             <div className="flex flex-wrap gap-3 pt-1">
               {activeSessionId ? (
                 <>
-                  <Button onClick={handleResumeSession}>Resume Session</Button>
+                  <Button onClick={handleResumeSession} className="site-theme w-full sm:w-auto">
+                    Resume Session
+                  </Button>
                   <Button
                     variant="destructive"
-                    onClick={handleStopSession}
+                    onClick={() => setEndConfirmOpen(true)}
                     disabled={stopLoading}
                   >
                     {stopLoading ? (
@@ -262,7 +277,11 @@ export function PublishPanel({
                   </Button>
                 </>
               ) : (
-                <Button onClick={handleStartSession} disabled={sessionLoading}>
+                <Button
+                  onClick={handleStartSession}
+                  disabled={sessionLoading}
+                  className="site-theme w-full sm:w-auto"
+                >
                   {sessionLoading ? (
                     <>
                       <Spinner size="sm" className="text-primary-foreground" />
@@ -303,5 +322,6 @@ export function PublishPanel({
         )}
       </CardContent>
     </Card>
+    </>
   );
 }

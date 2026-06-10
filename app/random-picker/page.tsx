@@ -9,7 +9,7 @@ import {
   useDraggable,
   useDroppable,
 } from "@dnd-kit/core";
-import { GripVertical, Loader2, RotateCcw, Shuffle, X } from "lucide-react";
+import { GripVertical, Loader2, Minus, Plus, RotateCcw, Shield, Shuffle, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -22,20 +22,33 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+import { EmptyAddCard } from "@/components/common/empty-add-card";
+
+import { isActivityCoordinator } from "@/lib/students/section-b-roster";
+
 import { Student } from "@/types";
+
+const poolActionButtonClass =
+  "text-muted-foreground h-7 w-7 shrink-0 rounded-md border border-border/80 bg-background/80 shadow-xs";
 
 /* ── Draggable student chip ─────────────────────────────────────── */
 function DraggableStudent({
   student,
   index,
   variant = "chip",
+  onMarkExcluded,
+  onRestoreToPool,
+  isCoordinatorExcluded = false,
 }: {
   student: Student;
   index?: number;
   variant?: "chip" | "card";
+  onMarkExcluded?: () => void;
+  onRestoreToPool?: () => void;
+  isCoordinatorExcluded?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: student.id });
+    useDraggable({ id: student.id, disabled: isCoordinatorExcluded });
 
   const style = transform
     ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)`, opacity: isDragging ? 0.4 : 1 }
@@ -43,26 +56,28 @@ function DraggableStudent({
 
   if (variant === "card") {
     return (
-      <Card
+      <div
         ref={setNodeRef}
         style={style}
-        className="border-blue-200 bg-gradient-to-r from-blue-50 to-purple-50 dark:border-blue-800 dark:from-blue-950/20 dark:to-purple-950/20 cursor-grab active:cursor-grabbing"
+        {...listeners}
+        {...attributes}
+        className="group bg-card hover:shadow-primary/5 relative flex cursor-grab overflow-hidden rounded-xl border transition-all duration-300 active:cursor-grabbing hover:border-primary/30"
       >
-        <CardContent className="flex items-center gap-3 px-4 py-3">
-          <div {...listeners} {...attributes} className="shrink-0 cursor-grab">
-            <GripVertical className="text-muted-foreground h-4 w-4" />
-          </div>
+        <div className="from-primary/5 pointer-events-none absolute inset-0 bg-linear-to-br via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+
+        <div className="relative flex w-full items-center gap-3 px-4 py-3">
+          <GripVertical className="text-muted-foreground h-4 w-4 shrink-0" aria-hidden="true" />
           {index !== undefined && (
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+            <div className="bg-primary/10 text-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
               {index + 1}
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">{student.name}</p>
+            <p className="truncate text-sm font-semibold tracking-tight">{student.name}</p>
             <p className="text-muted-foreground truncate text-xs">{student.usn}</p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
@@ -70,15 +85,57 @@ function DraggableStudent({
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-muted flex cursor-grab items-center gap-2 rounded-lg border px-3 py-2 active:cursor-grabbing"
+      {...(!isCoordinatorExcluded ? listeners : {})}
+      {...(!isCoordinatorExcluded ? attributes : {})}
+      className={`bg-card flex items-center gap-2 rounded-lg border px-3 py-2 ${
+        isCoordinatorExcluded ? "border-primary/20 bg-primary/5" : "cursor-grab active:cursor-grabbing"
+      }`}
     >
-      <div {...listeners} {...attributes}>
-        <GripVertical className="text-muted-foreground h-4 w-4" />
-      </div>
+      {!isCoordinatorExcluded && (
+        <GripVertical className="text-muted-foreground h-4 w-4 shrink-0" aria-hidden="true" />
+      )}
+      {isCoordinatorExcluded && (
+        <Shield className="text-primary h-4 w-4 shrink-0" aria-hidden="true" />
+      )}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{student.name}</p>
-        <p className="text-muted-foreground truncate text-xs">{student.usn}</p>
+        <p className="text-muted-foreground truncate text-xs">
+          {student.usn}
+          {isCoordinatorExcluded ? " · Coordinator" : ""}
+        </p>
       </div>
+      {onMarkExcluded && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={`${poolActionButtonClass} hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onMarkExcluded();
+          }}
+          aria-label={`Exclude ${student.name}`}
+        >
+          <Minus className="h-4 w-4" />
+        </Button>
+      )}
+      {onRestoreToPool && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={`${poolActionButtonClass} hover:text-primary hover:bg-primary/10 hover:border-primary/30`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onRestoreToPool();
+          }}
+          aria-label={`Restore ${student.name} to pool`}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      )}
     </div>
   );
 }
@@ -89,7 +146,7 @@ function DroppableZone({ id, children }: { id: string; children: React.ReactNode
   return (
     <div
       ref={setNodeRef}
-      className={`h-full rounded-lg transition-colors ${isOver ? "bg-blue-50 ring-2 ring-blue-400 dark:bg-blue-950/20 dark:ring-blue-600" : ""}`}
+      className={`h-full rounded-lg transition-colors ${isOver ? "bg-primary/5 ring-primary/30 ring-2" : ""}`}
     >
       {children}
     </div>
@@ -105,9 +162,38 @@ export default function RandomPickerPage() {
   const [loading, setLoading] = useState(true);
   const [picking, setPicking] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [excludeCoordinators, setExcludeCoordinators] = useState(true);
+  const [reseeding, setReseeding] = useState(false);
+
+  async function reseedStudents() {
+    const confirmed = window.confirm(
+      "Replace all students with the latest Section B roster? Your pick history will be cleared.",
+    );
+    if (!confirmed) return;
+
+    setReseeding(true);
+    try {
+      const res = await fetch("/api/seed-students", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Seed failed");
+
+      localStorage.removeItem("rp_picked");
+      toast.success(data.message);
+      window.location.reload();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Seed failed");
+    } finally {
+      setReseeding(false);
+    }
+  }
 
   /* ── Load students + restore from localStorage ── */
   useEffect(() => {
+    const savedExclude = localStorage.getItem("rp_exclude_coordinators");
+    if (savedExclude !== null) {
+      setExcludeCoordinators(savedExclude === "true");
+    }
+
     async function load() {
       try {
         const res = await fetch("/api/students");
@@ -138,6 +224,42 @@ export default function RandomPickerPage() {
     }
   }, [alreadyPicked, students.length]);
 
+  useEffect(() => {
+    localStorage.setItem("rp_exclude_coordinators", String(excludeCoordinators));
+  }, [excludeCoordinators]);
+
+  function isPoolEligible(student: Student) {
+    if (alreadyPicked.has(student.id)) return false;
+    if (excludeCoordinators && isActivityCoordinator(student.usn)) return false;
+    return true;
+  }
+
+  function isCoordinatorExcluded(student: Student) {
+    return excludeCoordinators && isActivityCoordinator(student.usn) && !alreadyPicked.has(student.id);
+  }
+
+  function isExcludedFromPool(student: Student) {
+    return alreadyPicked.has(student.id) || isCoordinatorExcluded(student);
+  }
+
+  function markAsExcluded(student: Student) {
+    if (isExcludedFromPool(student)) return;
+
+    setAlreadyPicked(new Set(alreadyPicked).add(student.id));
+    toast.success(`${student.name} excluded from pool`);
+  }
+
+  function restoreToPool(student: Student) {
+    if (isCoordinatorExcluded(student)) return;
+    if (!alreadyPicked.has(student.id)) return;
+
+    setPickedStudents(pickedStudents.filter((x) => x.id !== student.id));
+    const nextPicked = new Set(alreadyPicked);
+    nextPicked.delete(student.id);
+    setAlreadyPicked(nextPicked);
+    toast.success(`${student.name} restored to pool`);
+  }
+
   function secureRandom(max: number) {
     const buf = new Uint32Array(1);
     crypto.getRandomValues(buf);
@@ -148,7 +270,7 @@ export default function RandomPickerPage() {
     const n = Number(numberOfPicks);
     if (!n || n < 1) { toast.error("Enter a valid number (min 1)"); return; }
 
-    const available = students.filter((s) => !alreadyPicked.has(s.id));
+    const available = students.filter(isPoolEligible);
     if (available.length === 0) { toast.error("All students picked. Reset to continue."); return; }
 
     const actual = Math.min(n, available.length);
@@ -206,7 +328,17 @@ export default function RandomPickerPage() {
     }
   }
 
-  const availableCount = students.length - alreadyPicked.size;
+  const availableStudents = students.filter(isPoolEligible);
+  const availableCount = availableStudents.length;
+  const excludedStudents = students
+    .filter(isExcludedFromPool)
+    .sort((a, b) => {
+      const aIsCoordinator = isCoordinatorExcluded(a) ? 0 : 1;
+      const bIsCoordinator = isCoordinatorExcluded(b) ? 0 : 1;
+      if (aIsCoordinator !== bIsCoordinator) return aIsCoordinator - bIsCoordinator;
+      return a.name.localeCompare(b.name);
+    });
+  const excludedCount = excludedStudents.length;
   const activeStudent = students.find((s) => s.id === activeId);
 
   if (loading) {
@@ -222,29 +354,23 @@ export default function RandomPickerPage() {
 
   if (students.length === 0) {
     return (
-      <div className="container mx-auto mt-8 mb-32 max-w-6xl px-6">
-        <div className="rounded-lg border border-dashed p-12 text-center">
-          <p className="font-medium">No students found in database.</p>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Seed the student database first:{" "}
-            <code className="bg-muted rounded px-1">POST /api/seed-students</code>
-          </p>
-          <Button
-            className="mt-4"
-            onClick={async () => {
-              const res = await fetch("/api/seed-students", { method: "POST" });
-              const d = await res.json();
-              if (res.ok) {
-                toast.success(d.message);
-                window.location.reload();
-              } else {
-                toast.error(d.error ?? "Seed failed");
-              }
-            }}
-          >
-            Seed Students Now
-          </Button>
-        </div>
+      <div className="container mx-auto mt-8 mb-32 max-w-6xl px-4 sm:px-6">
+        <EmptyAddCard
+          title="Seed Students"
+          description="No Section B students in the database. Re-seed to load the latest MCA 1st year roster."
+          action={
+            <Button
+              className="mt-2"
+              disabled={reseeding}
+              onClick={reseedStudents}
+            >
+              {reseeding ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Seed Students Now
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -254,11 +380,11 @@ export default function RandomPickerPage() {
       onDragStart={(e) => setActiveId(e.active.id as string)}
       onDragEnd={handleDragEnd}
     >
-      <div className="container mx-auto mt-8 mb-32 max-w-6xl px-6">
+      <div className="container mx-auto mt-8 mb-32 max-w-6xl px-4 sm:px-6">
         <div className="mb-6">
           <h1 className="font-serif text-3xl font-semibold">Random Student Picker</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            MCA 1st yr Sec B — {students.length} students total
+            MCA 1st yr Sec B — {students.length} students · {availableCount} available · {excludedCount} excluded
           </p>
         </div>
 
@@ -314,7 +440,7 @@ export default function RandomPickerPage() {
                   <Button
                     variant="outline"
                     onClick={reset}
-                    disabled={alreadyPicked.size === 0}
+                    disabled={alreadyPicked.size === 0 && pickedStudents.length === 0}
                   >
                     <RotateCcw className="mr-2 h-4 w-4" />
                     Reset
@@ -352,25 +478,33 @@ export default function RandomPickerPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">
-                    Already Picked ({alreadyPicked.size})
+                    Already Picked / Excluded  ({excludedCount})
                   </CardTitle>
                   <p className="text-muted-foreground text-xs">
-                    Drag students here to mark as picked, or drag away to restore.
+                    Manually excluded students and activity coordinators. Use + to restore picks to the pool.
                   </p>
                 </CardHeader>
                 <CardContent>
                   <DroppableZone id="picked-sidebar">
-                    {alreadyPicked.size === 0 ? (
+                    {excludedCount === 0 ? (
                       <p className="text-muted-foreground py-8 text-center text-sm">
-                        No students picked yet.
+                        No students excluded yet.
                       </p>
                     ) : (
                       <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-                        {students
-                          .filter((s) => alreadyPicked.has(s.id))
-                          .map((s) => (
-                            <DraggableStudent key={s.id} student={s} variant="chip" />
-                          ))}
+                        {excludedStudents.map((s) => (
+                          <DraggableStudent
+                            key={s.id}
+                            student={s}
+                            variant="chip"
+                            isCoordinatorExcluded={isCoordinatorExcluded(s)}
+                            onRestoreToPool={
+                              isCoordinatorExcluded(s)
+                                ? undefined
+                                : () => restoreToPool(s)
+                            }
+                          />
+                        ))}
                       </div>
                     )}
                   </DroppableZone>
@@ -380,28 +514,64 @@ export default function RandomPickerPage() {
           </Card>
 
           {/* Available students sidebar */}
-          <Card className="flex max-h-[calc(100vh-8rem)] flex-col shadow-md lg:sticky lg:top-4">
-            <CardHeader className="shrink-0 pb-2">
-              <CardTitle className="text-base">
-                Available ({availableCount})
-              </CardTitle>
-              <p className="text-muted-foreground text-xs">
-                Drag here to remove from picked list.
-              </p>
+          <Card className="flex max-h-[calc(100vh-8rem)] flex-col shadow-md lg:sticky lg:top-4 gap-0">
+            <CardHeader className="shrink-0 space-y-4 pb-2">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <UserRound className="text-primary h-4 w-4" />
+                  Available ({availableCount})
+                </CardTitle>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Use − to exclude or drag students into Already Picked.
+                </p>
+              </div>
+              
+              <label className="hover:bg-muted/60 flex cursor-pointer items-center gap-2.5 rounded-lg border bg-background px-3 py-2 transition-colors">
+                      <input
+                        id="exclude-coordinators"
+                        type="checkbox"
+                        checked={excludeCoordinators}
+                        onChange={(event) =>
+                          setExcludeCoordinators(event.target.checked)
+                        }
+                        className="border-input text-primary focus:ring-ring size-4 rounded"
+                      />
+                      <span className="text-sm leading-none">
+                        Exclude activity coordinators 
+                      </span>
+                    </label>
+
+              {/* <div className="bg-muted/40 space-y-3 rounded-xl border border-dashed p-3">
+                <div className="flex items-start gap-3">
+                  <Shield className="text-primary mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div>
+                      <p className="text-sm font-medium">Activity Coordinators</p>
+                      <p className="text-muted-foreground text-xs">
+                        Optional exclusion from the pick pool
+                      </p>
+                    </div>
+                    
+                  </div>
+                </div>
+              </div> */}
             </CardHeader>
             <CardContent className="flex flex-1 flex-col overflow-hidden p-0">
               <DroppableZone id="available-zone">
                 {availableCount === 0 ? (
                   <p className="text-muted-foreground py-12 text-center text-sm">
-                    All students have been picked!
+                    No students available in the pool.
                   </p>
                 ) : (
                   <div className="h-full space-y-2 overflow-y-auto p-4">
-                    {students
-                      .filter((s) => !alreadyPicked.has(s.id))
-                      .map((s) => (
-                        <DraggableStudent key={s.id} student={s} variant="chip" />
-                      ))}
+                    {availableStudents.map((s) => (
+                      <DraggableStudent
+                        key={s.id}
+                        student={s}
+                        variant="chip"
+                        onMarkExcluded={() => markAsExcluded(s)}
+                      />
+                    ))}
                   </div>
                 )}
               </DroppableZone>
@@ -412,7 +582,7 @@ export default function RandomPickerPage() {
 
       <DragOverlay>
         {activeStudent ? (
-          <div className="rounded-lg border-2 border-blue-400 bg-white p-3 shadow-lg dark:bg-slate-800">
+          <div className="bg-card rounded-xl border p-3 shadow-lg">
             <p className="text-sm font-medium">{activeStudent.name}</p>
             <p className="text-muted-foreground text-xs">{activeStudent.usn}</p>
           </div>
