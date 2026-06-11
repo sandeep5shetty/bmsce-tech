@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 
 import { PastSessions } from "@/features/quiz/components/past-sessions";
 import { AiQuestionGenerator } from "@/features/quiz/components/ai-question-generator";
+import { JsonQuestionImporter } from "@/features/quiz/components/json-question-importer";
 import { PublishPanel } from "@/features/quiz/components/publish-panel";
 import { QuestionList } from "@/features/quiz/components/question-list";
 import type { Question } from "@/features/quiz/components/question-card";
@@ -115,6 +116,7 @@ export default async function QuizEventPage({ params }: PageProps) {
 
               <div className="flex flex-wrap items-center gap-2">
                 <AiQuestionGenerator eventId={eventId} />
+                <JsonQuestionImporter eventId={eventId} />
                 <Button size="sm" asChild>
                   <Link href={`/quiz/events/${eventId}/questions/new`}>
                     Add Question

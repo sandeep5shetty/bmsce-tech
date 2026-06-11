@@ -207,7 +207,7 @@ export const aiGeneratedQuestionsResponseSchema = z.object({
 });
 
 export const bulkCreateQuestionsSchema = z.object({
-  questions: z.array(createQuestionSchema).min(1).max(20),
+  questions: z.array(createQuestionSchema).min(1).max(50),
 });
 
 export type GenerateQuestionsInput = z.infer<typeof generateQuestionsSchema>;
