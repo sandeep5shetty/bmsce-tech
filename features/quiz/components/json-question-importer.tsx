@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { Check, FileJson, Loader2, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import type { ZodError } from "zod";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -85,12 +86,13 @@ function normalizeImportPayload(raw: unknown): unknown {
   return raw;
 }
 
-function formatValidationError(error: {
-  issues: Array<{ message: string; path: (string | number)[] }>;
-}): string {
+function formatValidationError(error: ZodError): string {
   const issue = error.issues[0];
   if (!issue) return "Invalid JSON format.";
-  const path = issue.path.length > 0 ? ` (${issue.path.join(".")})` : "";
+  const path =
+    issue.path.length > 0
+      ? ` (${issue.path.map(String).join(".")})`
+      : "";
   return `${issue.message}${path}`;
 }
 
