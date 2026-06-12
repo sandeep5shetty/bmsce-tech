@@ -17,10 +17,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-
-import Comment from "@/components/icons/comment";
-import CopyShare from "@/components/icons/copy-share";
 import Reset from "@/components/icons/reset";
 import Shuffle from "@/components/icons/shuffle";
 
@@ -35,17 +31,17 @@ import Cursor from "../icons/cursor";
 export default function FeaturesSection() {
   const features = [
     {
-      title: "Create Posts",
+      title: "Create Polls",
       description:
-        "Create posts to share your projects, ideas, or updates with the community.",
-      skeleton: <SkeletonCreateList />,
+        "Spin up yes/no or multiple-choice polls in seconds and share them with your class.",
+      skeleton: <SkeletonCreatePoll />,
       className: "col-span-1 lg:col-span-4 border-b lg:border-r",
     },
     {
-      title: "Share with Others",
+      title: "Join Live Quizzes",
       description:
-        "Share posts easily with a link to collaborate and get feedback.",
-      skeleton: <SkeletonShareList />,
+        "Enter a join code, pick your avatar, and compete in real-time quiz sessions.",
+      skeleton: <SkeletonJoinQuiz />,
       className: "border-b col-span-1 lg:col-span-2",
     },
 
@@ -125,61 +121,58 @@ const FeatureDescription = ({ children }: { children?: React.ReactNode }) => {
   );
 };
 
-// Skeleton 1: Create Post Form
-const SkeletonCreateList = () => {
+// Skeleton 1: Create Poll Form
+const SkeletonCreatePoll = () => {
   return (
     <div className="relative flex h-full justify-center px-8 py-8 perspective-distant transform-3d">
       <Card className="w-full max-w-md rotate-x-20 rotate-y-20 -rotate-z-15">
         <CardHeader>
           <CardTitle className="font-serif text-xl tracking-wider">
-            Create new Post
+            Create Question
           </CardTitle>
-          <CardDescription>Drop a new post into the community.</CardDescription>
+          <CardDescription>
+            Create a poll and share the link with your students.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Form Fields */}
           <div className="space-y-4">
-            {/* Title Field */}
             <div className="space-y-2 duration-300">
-              <Label htmlFor="title">Title</Label>
-              <Input id="title" value={"Web Development"} readOnly />
-            </div>
-
-            {/* Description Field */}
-            <div className="space-y-2">
-              <Label htmlFor="caption">
-                Caption{" "}
-                <span className="text-muted-foreground font-normal">
-                  (optional)
-                </span>
-              </Label>
-              <Textarea
-                id="caption"
-                placeholder="Write caption for the post here..."
-                rows={3}
-                className="resize-none"
-                value={""}
+              <Label htmlFor="poll-question">Question</Label>
+              <Input
+                id="poll-question"
+                value="Which topic should we cover next?"
                 readOnly
               />
             </div>
 
-            {/* Live Link Field */}
             <div className="space-y-2">
-              <Label htmlFor="livelink">
-                Live link{" "}
-                <span className="text-muted-foreground font-normal">
-                  (optional)
-                </span>
-              </Label>
-              <Input value={"https://sandeepshetty.dev"} readOnly />
+              <Label>Type</Label>
+              <div className="bg-muted/50 text-foreground flex h-9 items-center rounded-md border px-3 text-sm">
+                Yes / No
+              </div>
             </div>
 
-            {/* Buttons */}
+            <div className="space-y-2">
+              <Label htmlFor="poll-audience">Audience</Label>
+              <div className="bg-muted/50 text-foreground flex h-9 items-center rounded-md border px-3 text-sm">
+                All students
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 rounded-lg border bg-primary/5 px-3 py-2.5">
+              <div className="bg-primary/15 text-primary flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold">
+                ✓
+              </div>
+              <span className="text-muted-foreground text-xs">
+                Anonymous responses enabled
+              </span>
+            </div>
+
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1">
                 Cancel
               </Button>
-              <Button className="flex-1">Create Post</Button>
+              <Button className="flex-1">Create Question</Button>
             </div>
           </div>
         </CardContent>
@@ -191,244 +184,229 @@ const SkeletonCreateList = () => {
   );
 };
 
-// Skeleton 2: Share List - List cards with cursor animation and toast
-const SkeletonShareList = () => {
-  const [isCopied, setIsCopied] = useState(false);
+// Skeleton 2: Join Quiz — live session cards with answer selection animation
+const SkeletonJoinQuiz = () => {
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [scope, animate] = useAnimate();
 
-  const mockPosts = [
-    {
-      name: "GenAI Projects",
-      caption: "OpenAI SDK and DALL·E integrations",
-      date: "Nov 28",
-    },
-    {
-      name: "Web Development",
-      caption: "Next.js and Tailwind CSS projects",
-      date: "Dec 2",
-    },
-    {
-      name: "Mobile Apps",
-      caption: "iOS and Android applications using React Native",
-      date: "Dec 5",
-    },
+  const answerOptions = [
+    { id: "a", label: "Data Structures" },
+    { id: "b", label: "OS" },
+    { id: "c", label: "DBMS" },
+    { id: "d", label: "Networks" },
   ];
 
   useEffect(() => {
     const easeOut = [0.0, 0.0, 0.2, 1] as const;
     const easeInOut = [0.4, 0, 0.2, 1] as const;
+    let isCancelled = false;
+
+    function getCursorDelta() {
+      const cursor = scope.current?.querySelector(
+        "#quiz-cursor",
+      ) as HTMLElement | null;
+      const target = scope.current?.querySelector(
+        "#opt-b",
+      ) as HTMLElement | null;
+      if (!cursor || !target) return { x: 0, y: 0 };
+
+      const c = cursor.getBoundingClientRect();
+      const t = target.getBoundingClientRect();
+      const tip = { x: 6, y: 6 };
+
+      return {
+        x: t.left + t.width / 2 - tip.x - c.left,
+        y: t.top + t.height / 2 - tip.y - c.top,
+      };
+    }
 
     async function runAnimation() {
-      // Reset states
-      setIsCopied(false);
+      if (isCancelled || !scope.current) return;
 
-      // Reset cursor to start position (below the copy button)
+      setSelectedOption(null);
+
       await animate(
-        "#share-cursor",
-        { opacity: 0, translateX: 0, translateY: 20, scale: 1 },
+        "#quiz-cursor",
+        { opacity: 0, x: 0, y: 0, scale: 1 },
         { duration: 0 },
       );
 
-      // Reset toast
       await animate(
-        "#share-toast",
+        "#quiz-toast",
         { opacity: 0, translateY: 20, scale: 0.95 },
         { duration: 0 },
       );
 
-      // Small delay before starting
-      await new Promise((r) => setTimeout(r, 600));
+      for (const id of ["opt-a", "opt-b", "opt-c", "opt-d"]) {
+        await animate(
+          `#${id}`,
+          { backgroundColor: "transparent", scale: 1 },
+          { duration: 0 },
+        );
+      }
 
-      // 1. Cursor fades in smoothly
+      await new Promise((r) => setTimeout(r, 600));
+      if (isCancelled) return;
+
+      await new Promise<void>((r) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => r())),
+      );
+      const targetDelta = getCursorDelta();
+
       await animate(
-        "#share-cursor",
+        "#quiz-cursor",
         { opacity: 1 },
         { duration: 0.4, ease: easeOut },
       );
 
-      // 2. Cursor moves to copy button (upward and slightly left to center on button)
       await animate(
-        "#share-cursor",
-        { translateX: -4, translateY: -10 },
-        { duration: 0.7, ease: easeInOut },
+        "#quiz-cursor",
+        { x: targetDelta.x, y: targetDelta.y },
+        { duration: 0.75, ease: easeInOut },
       );
 
-      // 3. Hover effect on button
       await animate(
-        "#copy-btn",
-        {
-          backgroundColor: "rgba(34, 197, 94, 0.15)",
-        },
+        "#opt-b",
+        { backgroundColor: "rgba(59, 130, 246, 0.12)" },
         { duration: 0.15, ease: easeOut },
       );
 
-      // Natural pause before click
       await new Promise((r) => setTimeout(r, 180));
+      if (isCancelled) return;
 
-      // 4. Click - cursor presses down
       await animate(
-        "#share-cursor",
+        "#quiz-cursor",
         { scale: 0.85 },
         { duration: 0.06, ease: easeOut },
       );
-      animate("#copy-btn", { scale: 0.92 }, { duration: 0.06, ease: easeOut });
+      animate("#opt-b", { scale: 0.96 }, { duration: 0.06, ease: easeOut });
       await new Promise((r) => setTimeout(r, 60));
 
-      // 5. Release click
-      animate("#share-cursor", { scale: 1 }, { duration: 0.1, ease: easeOut });
+      animate("#quiz-cursor", { scale: 1 }, { duration: 0.1, ease: easeOut });
+      await animate("#opt-b", { scale: 1 }, { duration: 0.1, ease: easeOut });
+
+      setSelectedOption("b");
       await animate(
-        "#copy-btn",
-        { scale: 1 },
-        { duration: 0.1, ease: easeOut },
+        "#opt-b",
+        { backgroundColor: "rgba(34, 197, 94, 0.15)" },
+        { duration: 0.2, ease: easeOut },
       );
 
-      // 6. Show copied state
-      setIsCopied(true);
-
-      // Cursor drifts away
       animate(
-        "#share-cursor",
-        { translateX: 10, translateY: 5, opacity: 0.4 },
+        "#quiz-cursor",
+        {
+          x: targetDelta.x + 10,
+          y: targetDelta.y - 6,
+          opacity: 0.4,
+        },
         { duration: 0.35, ease: easeOut },
       );
 
-      // 7. Show toast notification with slide + scale
       await new Promise((r) => setTimeout(r, 150));
       await animate(
-        "#share-toast",
+        "#quiz-toast",
         { opacity: 1, translateY: 0, scale: 1 },
         { duration: 0.25, ease: easeOut },
       );
 
-      // Hold success state
       await new Promise((r) => setTimeout(r, 2200));
+      if (isCancelled) return;
 
-      // 8. Hide toast
       await animate(
-        "#share-toast",
+        "#quiz-toast",
         { opacity: 0, translateY: 8, scale: 0.98 },
         { duration: 0.25, ease: easeInOut },
       );
 
-      // 9. Cursor returns to start
       await animate(
-        "#share-cursor",
-        { translateX: 0, translateY: 20, opacity: 0 },
+        "#quiz-cursor",
+        { x: 0, y: 10, opacity: 0, scale: 1 },
         { duration: 0.4, ease: easeInOut },
       );
 
-      // Reset button
-      animate(
-        "#copy-btn",
-        { backgroundColor: "transparent" },
-        { duration: 0.15 },
-      );
-
-      // Pause before loop
       await new Promise((r) => setTimeout(r, 500));
-
+      if (isCancelled) return;
       runAnimation();
     }
 
     const timeout = setTimeout(runAnimation, 500);
-    return () => clearTimeout(timeout);
-  }, [animate]);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [animate, scope]);
 
   return (
     <div
       className="relative flex h-full flex-col items-center justify-center py-6"
       ref={scope}
     >
-      {/* Stacked List Cards */}
       <div className="relative w-full max-w-xs space-y-3">
-        {/* Card Above (faded) */}
-        <div className="bg-card rounded-xl border p-4 opacity-40">
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold">{mockPosts[0].name}</h3>
-            <p className="text-muted-foreground text-xs">
-              {mockPosts[0].caption}
-            </p>
-          </div>
-          <div className="mt-3 flex items-center justify-between border-t pt-2">
-            <span className="text-muted-foreground text-[10px]">
-              Posted on {mockPosts[0].date}
+        <div className="bg-card rounded-xl border p-3 opacity-40">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[10px] font-semibold tracking-wide text-primary uppercase">
+              Join Code
             </span>
-            <div className="flex gap-1">
-              <div className="bg-muted h-5 w-5 rounded" />
-              <div className="bg-muted h-5 w-5 rounded" />
-            </div>
+            <span className="text-muted-foreground font-mono text-[10px]">K7M2XP</span>
           </div>
+          <p className="text-muted-foreground text-xs">Waiting for host to start…</p>
         </div>
 
-        {/* Main Card (active) */}
         <div className="bg-card relative rounded-xl border p-4 shadow-lg">
-          <div className="space-y-2">
-            <div className="flex items-start justify-between">
-              <h3 className="text-sm font-semibold">{mockPosts[1].name}</h3>
+          <div className="mb-3 space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-semibold tracking-wide text-primary uppercase">
+                Question 3 of 10
+              </span>
+              <span className="text-muted-foreground text-[10px]">18s</span>
             </div>
-            <p className="text-muted-foreground text-xs">
-              {mockPosts[1].caption}
+            <p className="text-sm leading-snug font-semibold">
+              Which subject are you most confident in?
             </p>
           </div>
-          <div className="mt-3 flex items-center justify-between border-t pt-2">
-            <span className="text-muted-foreground text-[10px]">
-              Posted on {mockPosts[1].date}
+
+          <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-muted">
+            <div className="bg-primary h-full w-[62%] rounded-full" />
+          </div>
+
+          <div className="relative">
+            <div className="grid grid-cols-2 gap-2">
+              {answerOptions.map((opt) => (
+                <div
+                  key={opt.id}
+                  id={`opt-${opt.id}`}
+                  className={`rounded-lg border px-2.5 py-2 text-center text-[11px] font-medium transition-colors ${
+                    selectedOption === opt.id
+                      ? "border-green-500/40 text-green-700 dark:text-green-400"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {opt.label}
+                </div>
+              ))}
+            </div>
+
+            <Cursor
+              id="quiz-cursor"
+              className="pointer-events-none absolute left-0 top-full mt-0.5 size-5 opacity-0 z-10"
+            />
+          </div>
+        </div>
+
+        <div className="bg-card rounded-xl border p-3 opacity-40">
+          <div className="flex items-center gap-2">
+            <span className="text-lg" aria-hidden="true">
+              🦊
             </span>
-            <div className="relative flex gap-1">
-              {/* Play Button */}
-              <div
-                className={`text-muted-foreground flex h-6 w-6 cursor-default items-center justify-center rounded-md transition-colors`}
-              >
-                <Comment className="h-3.5 w-3.5" />
-              </div>
-
-              {/* Copy Button */}
-              <div
-                id="copy-btn"
-                className={`bg-muted flex h-6 w-6 cursor-default items-center justify-center rounded-md transition-colors ${
-                  isCopied
-                    ? "text-green-500"
-                    : "text-muted-foreground hover:text-primary"
-                }`}
-              >
-                {isCopied ? (
-                  <Tick className="h-3.5 w-3.5" />
-                ) : (
-                  <CopyShare className="h-3.5 w-3.5" />
-                )}
-              </div>
-
-              {/* Cursor - positioned at bottom-right of copy button */}
-              <Cursor
-                id="share-cursor"
-                className="absolute -right-2 -bottom-2 size-5 opacity-0"
-              />
+            <div>
+              <p className="text-xs font-semibold">Leaderboard</p>
+              <p className="text-muted-foreground text-[10px]">You&apos;re #4 · 1,240 pts</p>
             </div>
           </div>
         </div>
 
-        {/* Card Below (faded) */}
-        <div className="bg-card rounded-xl border p-4 opacity-40">
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold">{mockPosts[2].name}</h3>
-            <p className="text-muted-foreground text-xs">
-              {mockPosts[2].caption}
-            </p>
-          </div>
-          <div className="mt-3 flex items-center justify-between border-t pt-2">
-            <span className="text-muted-foreground text-[10px]">
-              Posted on {mockPosts[2].date}
-            </span>
-            <div className="flex gap-1">
-              <div className="bg-muted h-5 w-5 rounded" />
-              <div className="bg-muted h-5 w-5 rounded" />
-            </div>
-          </div>
-        </div>
-
-        {/* Toast Notification */}
         <div
-          id="share-toast"
+          id="quiz-toast"
           className="bg-card absolute right-0 bottom-4 left-0 mx-auto flex w-fit items-center gap-2 rounded-lg border px-3 py-2 opacity-0 shadow-xl"
           style={{ transform: "translateY(20px) scale(0.95)" }}
         >
@@ -436,7 +414,7 @@ const SkeletonShareList = () => {
             <Tick className="h-3 w-3 text-green-500" />
           </div>
           <span className="text-xs font-medium whitespace-nowrap">
-            Link copied!
+            Answer submitted!
           </span>
         </div>
       </div>
@@ -875,7 +853,7 @@ const SkeletonReviews = () => {
                     Shrilaxmi Heralagi
                   </span>
                   <span className="text-muted-foreground font-sans text-xs">
-                    1BM25MCA038-T
+                    1BM25MC088
                   </span>
                 </div>
               </div>
@@ -888,7 +866,7 @@ const SkeletonReviews = () => {
                     Padmaja N Bill
                   </span>
                   <span className="text-muted-foreground font-sans text-xs">
-                    1BM25MCA016-T
+                    1BM25MC063
                   </span>
                 </div>
               </div>
@@ -898,10 +876,10 @@ const SkeletonReviews = () => {
                 </div>
                 <div className="flex flex-col items-baseline">
                   <span className="text-foreground/70 text-md font-sans font-semibold">
-                    Subhiksha R C
+                    Sandeep Shetty
                   </span>
                   <span className="text-muted-foreground font-sans text-xs">
-                    1BM25MCA031 - T
+                    1BM25MC080
                   </span>
                 </div>
               </div>

@@ -210,9 +210,14 @@ export const bulkCreateQuestionsSchema = z.object({
   questions: z.array(createQuestionSchema).min(1).max(50),
 });
 
+export const bulkUpdateTimeLimitsSchema = z.object({
+  time_limit: z.number().int().min(5).max(120),
+});
+
 export type GenerateQuestionsInput = z.infer<typeof generateQuestionsSchema>;
 export type AiGeneratedQuestion = z.infer<typeof aiGeneratedQuestionSchema>;
 export type BulkCreateQuestionsInput = z.infer<typeof bulkCreateQuestionsSchema>;
+export type BulkUpdateTimeLimitsInput = z.infer<typeof bulkUpdateTimeLimitsSchema>;
 
 const displayNamePattern = new RegExp("^[\\p{L}\\p{N} \\-_]+$", "u");
 

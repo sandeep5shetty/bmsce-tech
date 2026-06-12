@@ -156,7 +156,7 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => router.push(`/quiz/events/${eventId}`)}>
+          <Button variant="outline" size="sm" onClick={() => router.push(`/quiz/events/${eventId}/analytics`)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>

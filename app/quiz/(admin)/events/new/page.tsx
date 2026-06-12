@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -103,12 +104,17 @@ export default function NewQuizEventPage() {
   return (
     <div className="container mx-auto mt-8 mb-32 max-w-6xl px-6">
       <div className="mx-auto max-w-xl space-y-6">
-        <div>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/quiz">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
           <Link
             href="/quiz"
             className="text-muted-foreground hover:text-foreground text-sm transition-colors"
           >
-            ← Back to Dashboard
+            Back to Dashboard
           </Link>
         </div>
 

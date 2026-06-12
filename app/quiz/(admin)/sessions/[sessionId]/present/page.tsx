@@ -7,6 +7,7 @@ import { createClient } from "@/features/quiz/lib/supabase-client"
 import { QRCodeDisplay } from "@/features/quiz/components/qr-code-display"
 import { ConfirmActionDialog } from "@/features/quiz/components/confirm-action-dialog"
 import { QuizAdminToolbarPortal } from "@/features/quiz/components/quiz-admin-toolbar-portal"
+import { QuizAvatar } from "@/features/quiz/components/quiz-avatar"
 import { SessionControlBar } from "@/features/quiz/components/session-control-bar"
 import { LoadingScreen } from "@/components/ui/loading-screen"
 import { Button } from "@/components/ui/button"
@@ -103,6 +104,7 @@ export default function PresentPage() {
   const [startError, setStartError] = useState<string | null>(null)
   const [sessionStatus, setSessionStatus] = useState<string>("lobby")
   const [currentQuestion, setCurrentQuestion] = useState<SessionData["events"] extends null ? null : NonNullable<SessionData["events"]>["questions"][0] | null>(null)
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number | null>(null)
   const [questionStartedAt, setQuestionStartedAt] = useState<string | null>(null)
   const [answeredCount, setAnsweredCount] = useState(0)
   const [totalParticipants, setTotalParticipants] = useState(0)
@@ -116,6 +118,8 @@ export default function PresentPage() {
   // Guards so auto-advance fires at most once per state transition
   const autoAdvancedQuestionIdRef = useRef<string | null>(null)
   const autoAdvancedResultsIdRef = useRef<string | null>(null)
+  const sessionRef = useRef<SessionData | null>(null)
+  sessionRef.current = session
 
   // Load session data
   useEffect(() => {
@@ -130,6 +134,7 @@ export default function PresentPage() {
         const s = data.session as SessionData
         setSession(s)
         setSessionStatus(s.status)
+        setCurrentQuestionIndex(s.current_question_index ?? null)
         // Restore current question if session is already in question state
         if (s.current_question_id && s.events?.questions) {
           const q = s.events.questions.find((q) => q.id === s.current_question_id) ?? null
@@ -180,18 +185,46 @@ export default function PresentPage() {
       .on("broadcast", { event: "session_state_changed" }, ({ payload }) => {
         const status = payload?.status as string
         setSessionStatus(status)
+        if (
+          payload?.currentQuestionIndex !== undefined &&
+          payload.currentQuestionIndex !== null
+        ) {
+          setCurrentQuestionIndex(payload.currentQuestionIndex)
+        }
         if (payload?.currentQuestion) {
-          // Map broadcast question shape to session question shape
           const bq = payload.currentQuestion as {
-            id: string; text: string; questionType: string; imageUrl: string | null;
-            timeLimitSeconds: number; options: Array<{ id: string; text: string | null; imageUrl: string | null; position: number }>
+            id: string
+            position?: number
+            text: string
+            questionType: string
+            imageUrl: string | null
+            timeLimitSeconds: number
+            options: Array<{ id: string; text: string | null; imageUrl: string | null; position: number }>
           }
-          setCurrentQuestion({
-            id: bq.id, text: bq.text, question_type: bq.questionType,
-            image_url: bq.imageUrl, time_limit: bq.timeLimitSeconds,
-            position: 0,
-            answer_options: bq.options.map((o) => ({ ...o, image_url: o.imageUrl, is_correct: false })),
-          })
+          const fromSession = sessionRef.current?.events?.questions.find(
+            (q) => q.id === bq.id,
+          )
+          if (fromSession) {
+            setCurrentQuestion(fromSession)
+          } else {
+            const index =
+              typeof payload.currentQuestionIndex === "number"
+                ? payload.currentQuestionIndex
+                : null
+            setCurrentQuestion({
+              id: bq.id,
+              text: bq.text,
+              question_type: bq.questionType,
+              image_url: bq.imageUrl,
+              time_limit: bq.timeLimitSeconds,
+              position: bq.position ?? (index !== null ? index + 1 : 1),
+              answer_options: bq.options.map((o) => ({
+                ...o,
+                image_url: o.imageUrl,
+                is_correct: false,
+              })),
+            })
+          }
           setQuestionStartedAt(payload.questionStartedAt ?? null)
           setAnsweredCount(0)
           setWordCloudData([])
@@ -245,6 +278,23 @@ export default function PresentPage() {
         const updatedSession = data?.session
         if (updatedSession?.status) {
           setSessionStatus(updatedSession.status)
+          if (updatedSession.current_question_index !== undefined) {
+            setCurrentQuestionIndex(updatedSession.current_question_index ?? null)
+          }
+          setSession((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  current_question_index:
+                    updatedSession.current_question_index ??
+                    prev.current_question_index,
+                  current_question_id:
+                    updatedSession.current_question_id ?? prev.current_question_id,
+                  question_started_at:
+                    updatedSession.question_started_at ?? prev.question_started_at,
+                }
+              : prev,
+          )
           // Only reset per-question state when entering a NEW question.
           // current_question_id remains set during results / leaderboard
           // (it points at the question we're showing results for), so we
@@ -451,7 +501,15 @@ export default function PresentPage() {
   }
 
   const totalQuestionsCount = session?.events?.questions?.length ?? 0
-  const currentIdx = session?.current_question_index ?? -1
+  const currentIdx =
+    currentQuestionIndex ??
+    session?.current_question_index ??
+    (currentQuestion
+      ? (session?.events?.questions.findIndex((q) => q.id === currentQuestion.id) ??
+        -1)
+      : -1)
+  const questionNumber =
+    currentIdx >= 0 ? currentIdx + 1 : (currentQuestion?.position ?? 1)
   const isLastQuestion = currentIdx >= 0 && currentIdx >= totalQuestionsCount - 1
 
   const showSessionControls = [
@@ -515,7 +573,7 @@ export default function PresentPage() {
             questionStartedAt={questionStartedAt}
             answeredCount={answeredCount}
             totalParticipants={totalParticipants}
-            questionNumber={currentIdx + 1}
+            questionNumber={questionNumber}
             totalQuestions={totalQuestionsCount}
           />
           {isOpenText && (
@@ -674,7 +732,7 @@ export default function PresentPage() {
                 <div className="flex flex-wrap gap-2" role="list" aria-label="Joined participants" aria-live="polite" aria-atomic="false">
                   {participantList.map((p) => (
                     <div key={p.participantId} role="listitem" className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-sm font-medium">
-                      <span aria-hidden="true">{p.avatar}</span>
+                      <QuizAvatar emoji={p.avatar} size="sm" />
                       <span>{p.displayName}</span>
                     </div>
                   ))}
@@ -810,16 +868,51 @@ function ResultsView({
           const pct = dist?.percentage ?? 0
           const count = dist?.count ?? 0
           return (
-            <div key={opt.id} className={`rounded-xl border px-4 py-3 space-y-2 ${isCorrect ? "border-green-500 bg-green-50" : "bg-card"}`}>
-              <div className="flex items-center justify-between text-sm font-medium">
-                <span className="flex items-center gap-2">
-                  {isCorrect && <span className="text-green-600" aria-label="Correct">✓</span>}
-                  {opt.text}
+            <div
+              key={opt.id}
+              className={`rounded-xl border px-4 py-3 space-y-2 ${
+                isCorrect
+                  ? "border-green-600 bg-green-100 ring-2 ring-green-600/30 dark:border-green-500 dark:bg-green-950/50 dark:ring-green-400/40"
+                  : "border-border bg-card"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3 text-sm font-medium">
+                <span className="flex min-w-0 items-center gap-2">
+                  {isCorrect ? (
+                    <span
+                      className="shrink-0 rounded-full bg-green-600 px-2 py-0.5 text-xs font-bold text-white dark:bg-green-500"
+                      aria-label="Correct answer"
+                    >
+                      ✓ Correct
+                    </span>
+                  ) : null}
+                  <span
+                    className={
+                      isCorrect
+                        ? "font-semibold text-green-950 dark:text-green-50"
+                        : "text-foreground"
+                    }
+                  >
+                    {opt.text}
+                  </span>
                 </span>
-                <span className="text-muted-foreground">{count} ({pct}%)</span>
+                <span
+                  className={
+                    isCorrect
+                      ? "shrink-0 font-medium text-green-800 dark:text-green-300"
+                      : "text-muted-foreground shrink-0"
+                  }
+                >
+                  {count} ({pct}%)
+                </span>
               </div>
               <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div className={`h-full rounded-full transition-all duration-500 ${isCorrect ? "bg-green-500" : "bg-primary"}`} style={{ width: `${pct}%` }} />
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    isCorrect ? "bg-green-600 dark:bg-green-500" : "bg-primary"
+                  }`}
+                  style={{ width: `${pct}%` }}
+                />
               </div>
             </div>
           )
@@ -842,7 +935,7 @@ function LeaderboardView({ entries, isFinal }: { entries: LeaderboardEntry[]; is
             <span className="text-2xl font-black text-muted-foreground w-8 text-center">
               {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉" : `#${entry.rank}`}
             </span>
-            <span className="text-2xl" aria-hidden="true">{entry.avatar}</span>
+            <QuizAvatar emoji={entry.avatar} size="2xl" />
             <span className="flex-1 font-semibold truncate">{entry.displayName}</span>
             <div className="text-right">
               <p className="font-bold">{entry.totalScore.toLocaleString()}</p>
@@ -888,7 +981,7 @@ function FinalLeaderboardView({ entries }: { entries: LeaderboardEntry[] }) {
         {/* 2nd place */}
         {top3[1] && (
           <div className="flex flex-col items-center gap-2 flex-1">
-            <span className="text-3xl">{top3[1].avatar}</span>
+            <QuizAvatar emoji={top3[1].avatar} size="3xl" />
             <p className="font-bold text-sm text-center truncate w-full">{top3[1].displayName}</p>
             <p className="text-sm text-muted-foreground">{top3[1].totalScore.toLocaleString()}</p>
             <div className="w-full h-20 rounded-t-xl bg-slate-300 flex items-center justify-center text-3xl font-black">🥈</div>
@@ -897,7 +990,7 @@ function FinalLeaderboardView({ entries }: { entries: LeaderboardEntry[] }) {
         {/* 1st place */}
         {top3[0] && (
           <div className="flex flex-col items-center gap-2 flex-1">
-            <span className="text-4xl">{top3[0].avatar}</span>
+            <QuizAvatar emoji={top3[0].avatar} size="hero" />
             <p className="font-bold text-sm text-center truncate w-full">{top3[0].displayName}</p>
             <p className="text-sm text-muted-foreground">{top3[0].totalScore.toLocaleString()}</p>
             <div className="w-full h-28 rounded-t-xl bg-yellow-300 flex items-center justify-center text-3xl font-black">🥇</div>
@@ -906,7 +999,7 @@ function FinalLeaderboardView({ entries }: { entries: LeaderboardEntry[] }) {
         {/* 3rd place */}
         {top3[2] && (
           <div className="flex flex-col items-center gap-2 flex-1">
-            <span className="text-3xl">{top3[2].avatar}</span>
+            <QuizAvatar emoji={top3[2].avatar} size="3xl" />
             <p className="font-bold text-sm text-center truncate w-full">{top3[2].displayName}</p>
             <p className="text-sm text-muted-foreground">{top3[2].totalScore.toLocaleString()}</p>
             <div className="w-full h-14 rounded-t-xl bg-amber-600 flex items-center justify-center text-3xl font-black">🥉</div>
@@ -920,7 +1013,7 @@ function FinalLeaderboardView({ entries }: { entries: LeaderboardEntry[] }) {
           {rest.map((entry) => (
             <div key={entry.participantId} className="flex items-center gap-4 rounded-xl border bg-card px-4 py-3">
               <span className="text-sm font-bold text-muted-foreground w-8 text-center">#{entry.rank}</span>
-              <span className="text-xl" aria-hidden="true">{entry.avatar}</span>
+              <QuizAvatar emoji={entry.avatar} size="xl" />
               <span className="flex-1 font-medium truncate">{entry.displayName}</span>
               <span className="font-bold">{entry.totalScore.toLocaleString()}</span>
             </div>

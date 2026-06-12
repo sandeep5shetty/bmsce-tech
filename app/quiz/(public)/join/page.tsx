@@ -10,7 +10,7 @@ import { Spinner } from "@/components/ui/spinner"
  *
  * Accepts a 6-character join code, looks up the session via
  * GET /api/quiz/v1/sessions/by-join-code?code=XXXXXX, and redirects
- * to /quiz/join/[joinCode] if found.
+ * to /quiz/join/[joinCode] for name entry.
  *
  * Requirements: 5.1, 5.2, 5.5, 5.8
  */

@@ -9,6 +9,20 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/join",
+        destination: "/quiz/join",
+        permanent: false,
+      },
+      {
+        source: "/join/:joinCode",
+        destination: "/quiz/join/:joinCode",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

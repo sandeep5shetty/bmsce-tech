@@ -136,15 +136,7 @@ export function QuizSidebarNav({
         </div>
       </div>
 
-      <div className="mt-auto shrink-0 border-t pt-4">
-        <Link
-          href="/dashboard"
-          onClick={onNavigate}
-          className="text-muted-foreground hover:text-foreground block px-3 text-xs transition-colors hover:underline"
-        >
-          ← Back to BMSCE Dashboard
-        </Link>
-      </div>
+      
     </nav>
   );
 }

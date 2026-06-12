@@ -53,6 +53,7 @@ import type {
   UpdateEventInput,
 } from "./validation";
 import { validateDisplayName } from "./validation";
+import { DEFAULT_QUIZ_AVATAR } from "./quiz-avatars";
 
 const ACTIVE_SESSION_STATUSES = [
   "countdown",
@@ -344,6 +345,48 @@ export async function listQuizQuestions(eventId: string) {
     ...serializeQuizQuestion(q),
     answer_options: q.answerOptions.map(serializeQuizAnswerOption),
   }));
+}
+
+export async function listQuizEventSessions(eventId: string) {
+  const admin = await requireAdmin();
+  const event = await getOwnedEvent(admin.id, eventId);
+  if (!event) {
+    throw new QuizApiError("EVENT_NOT_FOUND", "Event not found.", 404);
+  }
+
+  const sessions = await db.query.quizSession.findMany({
+    where: eq(quizSession.eventId, eventId),
+    orderBy: desc(quizSession.createdAt),
+  });
+
+  return sessions.map(serializeQuizSession);
+}
+
+export async function bulkUpdateQuestionTimeLimits(
+  eventId: string,
+  timeLimit: number,
+) {
+  const admin = await requireAdmin();
+  const event = await getOwnedEvent(admin.id, eventId);
+  if (!event) {
+    throw new QuizApiError("EVENT_NOT_FOUND", "Event not found.", 404);
+  }
+
+  const updated = await db
+    .update(quizQuestion)
+    .set({ timeLimit })
+    .where(eq(quizQuestion.eventId, eventId))
+    .returning({ id: quizQuestion.id });
+
+  if (updated.length === 0) {
+    throw new QuizApiError(
+      "NO_QUESTIONS",
+      "This event has no questions to update.",
+      404,
+    );
+  }
+
+  return { updated_count: updated.length, time_limit: timeLimit };
 }
 
 async function insertQuestionWithOptions(
@@ -1060,6 +1103,7 @@ export async function advanceQuizSession(sessionId: string) {
     const q = questions[newQuestionIndex];
     currentQuestionPayload = {
       id: q.id,
+      position: q.position,
       text: q.text,
       questionType: q.questionType,
       imageUrl: q.imageUrl,
@@ -1161,12 +1205,7 @@ export async function joinQuizSession(
   }
 
   if (!data.avatar?.trim()) {
-    throw new QuizApiError(
-      "VALIDATION_ERROR",
-      "avatar is required.",
-      400,
-      "avatar",
-    );
+    data.avatar = DEFAULT_QUIZ_AVATAR;
   }
 
   const session = await db.query.quizSession.findFirst({
@@ -1634,4 +1673,88 @@ export async function exportQuizAnalyticsCsv(sessionId: string) {
   }
 
   return generateSessionCsv(sessionId);
+}
+
+export async function removeQuizParticipant(
+  sessionId: string,
+  participantToken: string,
+) {
+  const participant = await db.query.quizSessionParticipant.findFirst({
+    where: and(
+      eq(quizSessionParticipant.participantToken, participantToken),
+      eq(quizSessionParticipant.sessionId, sessionId),
+    ),
+    columns: { id: true },
+  });
+
+  if (!participant) {
+    throw new QuizApiError("UNAUTHORIZED", "Invalid participant token.", 401);
+  }
+
+  await db
+    .delete(quizSessionParticipant)
+    .where(eq(quizSessionParticipant.id, participant.id));
+
+  return { removed: true };
+}
+
+export async function updateQuizParticipantAvatar(
+  sessionId: string,
+  participantToken: string,
+  avatar: string,
+) {
+  const trimmedAvatar = avatar.trim();
+  if (!trimmedAvatar) {
+    throw new QuizApiError(
+      "VALIDATION_ERROR",
+      "avatar is required.",
+      400,
+      "avatar",
+    );
+  }
+
+  const participant = await db.query.quizSessionParticipant.findFirst({
+    where: and(
+      eq(quizSessionParticipant.participantToken, participantToken),
+      eq(quizSessionParticipant.sessionId, sessionId),
+    ),
+    columns: { id: true },
+  });
+
+  if (!participant) {
+    throw new QuizApiError("UNAUTHORIZED", "Invalid participant token.", 401);
+  }
+
+  const session = await db.query.quizSession.findFirst({
+    where: eq(quizSession.id, sessionId),
+    columns: { status: true },
+  });
+
+  if (!session) {
+    throw new QuizApiError("SESSION_NOT_FOUND", "Session not found.", 404);
+  }
+
+  if (session.status !== "lobby") {
+    throw new QuizApiError(
+      "SESSION_ALREADY_STARTED",
+      "Avatar can only be changed while waiting in the lobby.",
+      409,
+    );
+  }
+
+  const [updated] = await db
+    .update(quizSessionParticipant)
+    .set({ avatar: trimmedAvatar })
+    .where(eq(quizSessionParticipant.id, participant.id))
+    .returning({ avatar: quizSessionParticipant.avatar });
+
+  if (!updated) {
+    throw new QuizApiError(
+      "SERVER_ERROR",
+      "Failed to update avatar. Please try again.",
+      500,
+    );
+  }
+
+  return { avatar: updated.avatar };
 }

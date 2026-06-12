@@ -44,5 +44,7 @@ next-env.d.ts
 
 # clerk configuration (can include secrets)
 /.clerk/
-
 /generated
+
+# Local-only academic seed data (use placement-academic.example.json as template)
+/scripts/data/placement-academic.json

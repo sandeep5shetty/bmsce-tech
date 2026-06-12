@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { BarChart2, ArrowLeft } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
+import { BulkTimeLimitEditor } from "@/features/quiz/components/bulk-time-limit-editor";
+import { EventAnalyticsPanel } from "@/features/quiz/components/event-analytics-panel";
 import { PastSessions } from "@/features/quiz/components/past-sessions";
 import { AiQuestionGenerator } from "@/features/quiz/components/ai-question-generator";
 import { JsonQuestionImporter } from "@/features/quiz/components/json-question-importer";
@@ -43,10 +47,13 @@ export default async function QuizEventPage({ params }: PageProps) {
       activeSessionId = active?.id ?? null;
       endedSessions = sessions
         .filter((s: { status: string }) => s.status === "ended")
-        .slice(0, 5);
+        .map((s: { id: string; ended_at: string | null }) => ({
+          id: s.id,
+          ended_at: s.ended_at,
+        }));
     }
   } catch {
-    // Sessions endpoint may not exist yet
+    // Sessions list unavailable
   }
 
   const themeInput = {
@@ -54,15 +61,21 @@ export default async function QuizEventPage({ params }: PageProps) {
     customTheme: event.custom_theme as CustomTheme | null,
   };
   const gradient = resolveGradient(themeInput);
+  const latestEndedSessionId = endedSessions[0]?.id ?? null;
 
   return (
     <div className="container mx-auto mt-6 mb-32 max-w-6xl space-y-6 px-4 sm:mt-8 sm:px-6">
-      <div>
+      <div className="flex items-center gap-3">
+        <Button variant="outline" size="sm" asChild>
+          <Link href="/quiz">
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+        </Button>
         <Link
           href="/quiz"
           className="text-muted-foreground hover:text-foreground text-sm transition-colors"
         >
-          ← Back to Dashboard
+          Back to Dashboard
         </Link>
       </div>
 
@@ -70,7 +83,7 @@ export default async function QuizEventPage({ params }: PageProps) {
         <div className="flex items-start justify-between gap-4 px-6 py-7 text-white sm:px-8">
           <div className="min-w-0">
             <div className="mb-1.5 flex flex-wrap items-center gap-3">
-              <h1 className="font-serif truncate text-2xl font-bold tracking-tight drop-shadow-sm sm:text-3xl">
+              <h1 className="font-serif truncate text-2xl font-bold tracking-wide drop-shadow-sm sm:text-3xl">
                 {event.title}
               </h1>
               <StatusBadge status={event.status} />
@@ -81,24 +94,41 @@ export default async function QuizEventPage({ params }: PageProps) {
               </p>
             )}
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="shrink-0 bg-white/15 text-white hover:bg-white/25"
-            asChild
-          >
-            <Link href={`/quiz/events/${eventId}/edit`}>Edit Event</Link>
-          </Button>
+          <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row">
+            <Button
+              size="sm"
+              className="site-theme bg-white/95 text-foreground dark:text-background hover:bg-white"
+              asChild
+            >
+              <Link href={`/quiz/events/${eventId}/analytics`}>
+                <BarChart2 className="h-3.5 w-3.5" />
+                Analytics
+              </Link>
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="shrink-0 bg-white/15 text-white hover:bg-white/25"
+              asChild
+            >
+              <Link href={`/quiz/events/${eventId}/edit`}>Edit Event</Link>
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[360px_1fr]">
-        <aside className="lg:sticky lg:top-24">
+        <aside className="space-y-6 lg:sticky lg:top-24">
           <PublishPanel
             eventId={eventId}
             status={event.status}
             joinCode={event.join_code ?? null}
             activeSessionId={activeSessionId}
+          />
+          <EventAnalyticsPanel
+            eventId={eventId}
+            latestEndedSessionId={latestEndedSessionId}
+            endedSessionCount={endedSessions.length}
           />
         </aside>
 
@@ -115,6 +145,15 @@ export default async function QuizEventPage({ params }: PageProps) {
               </h2>
 
               <div className="flex flex-wrap items-center gap-2">
+                <BulkTimeLimitEditor
+                  eventId={eventId}
+                  questionCount={questionList.length}
+                  defaultTimeLimit={
+                    questionList.length > 0
+                      ? questionList[0].time_limit
+                      : 20
+                  }
+                />
                 <AiQuestionGenerator eventId={eventId} />
                 <JsonQuestionImporter eventId={eventId} />
                 <Button size="sm" asChild>
@@ -128,12 +167,17 @@ export default async function QuizEventPage({ params }: PageProps) {
             <QuestionList questions={questionList} eventId={eventId} />
           </section>
 
-          {endedSessions.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="font-serif text-lg font-semibold">Past Sessions</h2>
+          <section className="space-y-3">
+            <h2 className="font-serif text-lg font-semibold">Past Sessions</h2>
+            {endedSessions.length > 0 ? (
               <PastSessions eventId={eventId} sessions={endedSessions} />
-            </section>
-          )}
+            ) : (
+              <p className="text-muted-foreground rounded-lg border border-dashed px-4 py-6 text-center text-sm">
+                No completed sessions yet. End a live quiz to unlock analytics
+                for that run.
+              </p>
+            )}
+          </section>
         </div>
       </div>
     </div>

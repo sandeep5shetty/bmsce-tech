@@ -93,30 +93,33 @@ export function EventCard({ event }: EventCardProps) {
         loading={deleting}
         destructive
       />
-      <Card
-      className="group flex flex-col gap-0 overflow-hidden py-0 transition-shadow hover:shadow-lg"
-    >
-      <div
-        className="relative flex min-h-28 items-start justify-between gap-3 overflow-hidden px-4 py-4"
-        style={{ background: gradient }}
-      >
-        <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/20 to-transparent" />
-        <h3 className="relative min-w-0 flex-1 line-clamp-3 text-lg font-bold leading-snug tracking-tight text-white drop-shadow-sm">
-          {event.title}
-        </h3>
-        <StatusBadge status={event.status} />
-      </div>
+      <Card className="group flex flex-col gap-0 overflow-hidden py-0 transition-shadow hover:shadow-lg">
+        <Link
+          href={`/quiz/events/${event.id}`}
+          className="flex flex-1 flex-col outline-none focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2"
+        >
+          <div
+            className="relative flex min-h-28 items-start justify-between gap-3 overflow-hidden px-4 py-4"
+            style={{ background: gradient }}
+          >
+            <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/20 to-transparent" />
+            <h3 className="relative min-w-0 flex-1 line-clamp-3 text-lg font-bold leading-snug tracking-wide text-white drop-shadow-sm">
+              {event.title}
+            </h3>
+            <StatusBadge status={event.status} />
+          </div>
 
-      <CardContent className="flex-1 px-6 pt-4 pb-3">
-        {event.description ? (
-          <p className="text-foreground/80 mb-2 line-clamp-2 text-sm">
-            {event.description}
-          </p>
-        ) : null}
-        <p className="text-muted-foreground text-xs">Created {formattedDate}</p>
-      </CardContent>
+          <CardContent className="flex-1 px-6 pt-4 pb-3 transition-colors group-hover:bg-accent/30">
+            {event.description ? (
+              <p className="text-foreground/80 mb-2 line-clamp-2 text-sm">
+                {event.description}
+              </p>
+            ) : null}
+            <p className="text-muted-foreground text-xs">Created {formattedDate}</p>
+          </CardContent>
+        </Link>
 
-      <CardFooter className="gap-2 px-6 pt-0 pb-6">
+        <CardFooter className="gap-2 px-6 pt-0 pb-6">
         <Button asChild className="flex-1">
           <Link href={`/quiz/events/${event.id}`}>
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />

@@ -17,8 +17,8 @@ import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 
 import * as schema from "../db/schema";
-import { placementAcademicData } from "../db/placement-academic-data";
 import { placementEmailMap } from "../db/placement-email-map";
+import { loadAcademicSeedData } from "./load-academic-seed-data";
 
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle({ client: sql, schema });
@@ -38,11 +38,34 @@ async function hashPassword(password: string): Promise<string> {
   return `${salt}:${bytesToHex(key)}`;
 }
 
+function buildProfileValues(
+  userId: string,
+  student: ReturnType<typeof loadAcademicSeedData>[number],
+  pgCgpa: number,
+) {
+  return {
+    userId,
+    pgCgpa,
+    hasBacklog: false,
+    backlogCount: 0,
+    isPlacementEligible: true,
+    batch: student.batch ?? "2024-26",
+    tenthPercent: student.tenthPercent,
+    twelthPercent: student.twelthPercent,
+    degreeType: student.degreeType ?? "BCA",
+    degreeCgpa: null,
+    gender: null,
+    category: null,
+  };
+}
+
 async function main() {
   let created = 0;
   let alreadyExists = 0;
   let profilesLinked = 0;
   let skippedNoEmail = 0;
+
+  const placementAcademicData = loadAcademicSeedData();
 
   for (const student of placementAcademicData) {
     const email = placementEmailMap[student.usn];
@@ -86,26 +109,15 @@ async function main() {
       }
 
       // Link profile if not yet linked and CGPA exists
-      if (student.pgCgpa !== null) {
+      if (typeof student.pgCgpa === "number") {
         const existingProfile = await db.query.placementStudentProfile.findFirst({
           where: eq(schema.placementStudentProfile.userId, existingUser.id),
           columns: { id: true },
         });
         if (!existingProfile) {
-          await db.insert(schema.placementStudentProfile).values({
-            userId: existingUser.id,
-            pgCgpa: student.pgCgpa,
-            hasBacklog: false,
-            backlogCount: 0,
-            isPlacementEligible: true,
-            batch: student.batch,
-            tenthPercent: student.tenthPercent,
-            twelthPercent: student.twelthPercent,
-            degreeType: student.degreeType,
-            degreeCgpa: null,
-            gender: null,
-            category: null,
-          });
+          await db.insert(schema.placementStudentProfile).values(
+            buildProfileValues(existingUser.id, student, student.pgCgpa),
+          );
           profilesLinked++;
         }
       }
@@ -141,21 +153,10 @@ async function main() {
     console.log(`  ✓ Created: ${student.name} (${email})`);
 
     // Link placement profile if CGPA available
-    if (student.pgCgpa !== null) {
-      await db.insert(schema.placementStudentProfile).values({
-        userId,
-        pgCgpa: student.pgCgpa,
-        hasBacklog: false,
-        backlogCount: 0,
-        isPlacementEligible: true,
-        batch: student.batch,
-        tenthPercent: student.tenthPercent,
-        twelthPercent: student.twelthPercent,
-        degreeType: student.degreeType,
-        degreeCgpa: null,
-        gender: null,
-        category: null,
-      });
+    if (typeof student.pgCgpa === "number") {
+      await db.insert(schema.placementStudentProfile).values(
+        buildProfileValues(userId, student, student.pgCgpa),
+      );
       profilesLinked++;
     }
   }

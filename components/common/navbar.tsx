@@ -152,7 +152,7 @@ const Navbar = () => {
           <div className="relative flex shrink-0 items-center gap-1 sm:gap-3">
             <ThemeToggle />
             {isLoading ? (
-              <Skeleton className="h-9 w-9 rounded-full sm:h-10 sm:w-10" />
+              <Skeleton className="h-9 w-9 rounded-full" />
             ) : user ? (
               <>
                 {isLanding && (

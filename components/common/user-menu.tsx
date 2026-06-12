@@ -69,16 +69,16 @@ export function UserMenu({ user }: UserMenuProps) {
         <PopoverTrigger asChild>
           <Button
             variant="ghost"
-            className="relative h-10 w-10 rounded-full p-0"
+            className="relative h-9 w-9 rounded-full p-0"
             aria-label="User menu"
           >
-            <Avatar className="h-10 w-10">
+            <Avatar className="h-9 w-9">
               <AvatarImage
                 key={profileImageSrc}
                 src={profileImageSrc}
                 alt={user.name || ""}
               />
-              <AvatarFallback className="text-sm">{initials}</AvatarFallback>
+              <AvatarFallback className="text-xs">{initials}</AvatarFallback>
             </Avatar>
           </Button>
         </PopoverTrigger>

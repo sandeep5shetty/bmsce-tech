@@ -1,44 +1,27 @@
 import { config } from "dotenv";
+
 config({ path: ".env.local" });
 
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
-
-import { placementAcademicData } from "../db/placement-academic-data";
-import { placementAcademicRecord } from "../db/schema";
-
-const sql = neon(process.env.DATABASE_URL!);
-const db = drizzle({ client: sql });
+import { loadAcademicSeedData } from "./load-academic-seed-data";
 
 async function main() {
-  console.log(`Seeding ${placementAcademicData.length} academic records...`);
+  // Import after dotenv so @/db sees DATABASE_URL
+  const { upsertAcademicRecord } = await import(
+    "../features/placement/lib/academic-records"
+  );
 
-  for (const record of placementAcademicData) {
-    await db
-      .insert(placementAcademicRecord)
-      .values({
-        usn: record.usn,
-        name: record.name,
-        batch: record.batch,
-        tenthPercent: record.tenthPercent,
-        twelthPercent: record.twelthPercent,
-        pgCgpa: record.pgCgpa ?? undefined,
-        degreeType: record.degreeType,
-      })
-      .onConflictDoUpdate({
-        target: placementAcademicRecord.usn,
-        set: {
-          name: record.name,
-          tenthPercent: record.tenthPercent,
-          twelthPercent: record.twelthPercent,
-          pgCgpa: record.pgCgpa ?? undefined,
-          degreeType: record.degreeType,
-        },
-      });
+  const records = loadAcademicSeedData();
+  console.log(`Seeding ${records.length} academic records into the database...`);
+
+  for (const record of records) {
+    await upsertAcademicRecord(record);
   }
 
   console.log("Done.");
   process.exit(0);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

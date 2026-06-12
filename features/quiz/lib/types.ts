@@ -57,6 +57,7 @@ export interface LeaderboardEntry {
 
 export interface CurrentQuestionPayload {
   id: string;
+  position: number;
   text: string;
   questionType: string;
   imageUrl: string | null;

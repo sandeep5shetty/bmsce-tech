@@ -6,7 +6,10 @@ import { getUser } from "@/actions/user";
 import db from "@/db";
 import { placementEmailMap } from "@/db/placement-email-map";
 import {
-  placementAcademicRecord,
+  linkProfileFromAcademicRecord,
+  upsertAcademicRecord,
+} from "@/features/placement/lib/academic-records";
+import {
   placementStudentProfile,
   user,
 } from "@/db/schema";
@@ -118,65 +121,20 @@ export async function POST(req: Request) {
           continue;
         }
 
-        // Upsert academic record
-        await db
-          .insert(placementAcademicRecord)
-          .values({
-            usn: usnUpper,
-            name,
-            batch: "2024-26",
-            tenthPercent: tenth,
-            twelthPercent: twelth,
-            pgCgpa: pgCgpa ?? undefined,
-            degreeType: "BCA",
-          })
-          .onConflictDoUpdate({
-            target: placementAcademicRecord.usn,
-            set: {
-              name,
-              tenthPercent: tenth,
-              twelthPercent: twelth,
-              pgCgpa: pgCgpa ?? undefined,
-            },
-          });
+        await upsertAcademicRecord({
+          usn: usnUpper,
+          name,
+          batch: "2024-26",
+          tenthPercent: tenth,
+          twelthPercent: twelth,
+          pgCgpa,
+          degreeType: "BCA",
+        });
         recordsSeeded++;
 
-        // Auto-link if USN is in the email map and user has registered
         if (pgCgpa !== null) {
           const email = placementEmailMap[usnUpper];
-          if (!email) continue; // No email mapped for this student
-          const matchedUser = await db.query.user.findFirst({
-            where: eq(user.email, email),
-            columns: { id: true },
-          });
-
-          if (matchedUser) {
-            const existing = await db.query.placementStudentProfile.findFirst({
-              where: eq(placementStudentProfile.userId, matchedUser.id),
-            });
-            const vals = {
-              pgCgpa,
-              hasBacklog: false,
-              backlogCount: 0,
-              isPlacementEligible: true,
-              batch: "2024-26",
-              tenthPercent: tenth,
-              twelthPercent: twelth,
-              degreeType: "BCA",
-              degreeCgpa: null,
-              gender: null,
-              category: null,
-            };
-            if (existing) {
-              await db
-                .update(placementStudentProfile)
-                .set(vals)
-                .where(eq(placementStudentProfile.userId, matchedUser.id));
-            } else {
-              await db
-                .insert(placementStudentProfile)
-                .values({ userId: matchedUser.id, ...vals });
-            }
+          if (email && (await linkProfileFromAcademicRecord(usnUpper, email))) {
             profilesLinked++;
           }
         }
