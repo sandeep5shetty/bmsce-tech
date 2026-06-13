@@ -28,6 +28,8 @@ export const createEventSchema = z.object({
     .max(500, "Description must be 500 characters or fewer.")
     .nullable()
     .optional(),
+  auto_play_mode: z.boolean().optional(),
+  enforce_focus_mode: z.boolean().optional(),
 });
 
 export const updateEventSchema = z
@@ -65,6 +67,8 @@ export const updateEventSchema = z
       .nullable()
       .optional(),
     logo_url: z.string().url().nullable().optional(),
+    auto_play_mode: z.boolean().optional(),
+    enforce_focus_mode: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "No valid fields provided for update.",

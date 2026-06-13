@@ -82,6 +82,8 @@ export function serializeQuizEvent(row: QuizEventRow) {
     theme_id: row.themeId,
     custom_theme: row.customTheme,
     anonymous_mode: row.anonymousMode,
+    auto_play_mode: row.autoPlayMode,
+    enforce_focus_mode: row.enforceFocusMode,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };

@@ -329,6 +329,8 @@ export const quizEvent = pgTable(
     themeId: text("theme_id").notNull().default("default"),
     customTheme: jsonb("custom_theme"),
     anonymousMode: boolean("anonymous_mode").notNull().default(false),
+    autoPlayMode: boolean("auto_play_mode").notNull().default(false),
+    enforceFocusMode: boolean("enforce_focus_mode").notNull().default(true),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
       .notNull()

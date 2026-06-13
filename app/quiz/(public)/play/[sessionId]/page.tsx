@@ -99,6 +99,7 @@ export default function PlayPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [themeId, setThemeId] = useState<string | null>(null)
   const [customTheme, setCustomTheme] = useState<CustomTheme | null>(null)
+  const [enforceFocusMode, setEnforceFocusMode] = useState(true)
 
   // Answer submission state
   const [lastScoreAwarded, setLastScoreAwarded] = useState<number>(0)
@@ -138,6 +139,7 @@ export default function PlayPage() {
         setCurrentQuestionIndex(data.session?.current_question_index ?? null)
         setThemeId(data.session?.events?.theme_id ?? null)
         setCustomTheme((data.session?.events?.custom_theme as CustomTheme | null) ?? null)
+        setEnforceFocusMode(data.session?.events?.enforce_focus_mode ?? true)
       })
       .catch(() => setLoadError("Network error. Please refresh the page."))
   }, [sessionId, router, participantToken])
@@ -349,7 +351,8 @@ export default function PlayPage() {
     "final_leaderboard",
   ].includes(sessionStatus)
 
-  const fullscreen = useQuizFullscreen(quizActive)
+  const focusEnforcementActive = quizActive && enforceFocusMode
+  const fullscreen = useQuizFullscreen(focusEnforcementActive)
 
   const removedCalledRef = useRef(false)
   useEffect(() => {
@@ -441,7 +444,7 @@ export default function PlayPage() {
   if (sessionStatus === "countdown") {
     return (
       <>
-        <QuizFullscreenGuard active={quizActive} state={fullscreen} />
+        <QuizFullscreenGuard active={focusEnforcementActive} state={fullscreen} />
         <div className="min-h-screen flex items-center justify-center bg-background">
           {reconnectionBanner}
           <CountdownView />
@@ -457,7 +460,7 @@ export default function PlayPage() {
         : currentQuestion.position
     return (
       <>
-        <QuizFullscreenGuard active={quizActive} state={fullscreen} />
+        <QuizFullscreenGuard active={focusEnforcementActive} state={fullscreen} />
         <QuestionView
         key={currentQuestion.id}
         question={currentQuestion}
@@ -477,7 +480,7 @@ export default function PlayPage() {
   if (sessionStatus === "results") {
     return (
       <>
-        <QuizFullscreenGuard active={quizActive} state={fullscreen} />
+        <QuizFullscreenGuard active={focusEnforcementActive} state={fullscreen} />
         <ResultFeedbackView
         isCorrect={lastIsCorrect}
         scoreAwarded={lastScoreAwarded}
@@ -494,7 +497,7 @@ export default function PlayPage() {
     if (!leaderboardData) {
       return (
         <>
-          <QuizFullscreenGuard active={quizActive} state={fullscreen} />
+          <QuizFullscreenGuard active={focusEnforcementActive} state={fullscreen} />
           {reconnectionBanner}
           <LoadingScreen label="Loading leaderboard…" emoji="🏆" />
         </>
@@ -502,7 +505,7 @@ export default function PlayPage() {
     }
     return (
       <>
-        <QuizFullscreenGuard active={quizActive} state={fullscreen} />
+        <QuizFullscreenGuard active={focusEnforcementActive} state={fullscreen} />
         <ParticipantLeaderboardView entries={leaderboardData.entries} participantId={participantId} isFinal={false} />
       </>
     )
@@ -512,7 +515,7 @@ export default function PlayPage() {
     if (!leaderboardData) {
       return (
         <>
-          <QuizFullscreenGuard active={quizActive} state={fullscreen} />
+          <QuizFullscreenGuard active={focusEnforcementActive} state={fullscreen} />
           {reconnectionBanner}
           <LoadingScreen label="Loading final results…" emoji="🏆" />
         </>
@@ -520,7 +523,7 @@ export default function PlayPage() {
     }
     return (
       <>
-        <QuizFullscreenGuard active={quizActive} state={fullscreen} />
+        <QuizFullscreenGuard active={focusEnforcementActive} state={fullscreen} />
         <ParticipantLeaderboardView entries={leaderboardData.entries} participantId={participantId} isFinal={true} />
       </>
     )
@@ -530,7 +533,7 @@ export default function PlayPage() {
     const myEntry = leaderboardData?.entries.find((e) => e.participantId === participantId)
     return (
       <>
-        <QuizFullscreenGuard active={quizActive} state={fullscreen} />
+        <QuizFullscreenGuard active={focusEnforcementActive} state={fullscreen} />
         <EndView displayName={displayName} avatar={avatar} rank={myEntry?.rank ?? null} totalScore={myEntry?.totalScore ?? runningTotal} />
       </>
     )
@@ -539,7 +542,7 @@ export default function PlayPage() {
   // Lobby / waiting state
   return (
     <>
-      <QuizFullscreenGuard active={quizActive} state={fullscreen} />
+      <QuizFullscreenGuard active={focusEnforcementActive} state={fullscreen} />
       <LobbyWaitingView
         sessionTitle={sessionTitle}
         displayName={displayName}

@@ -137,6 +137,8 @@ export async function createQuizEvent(data: CreateEventInput) {
         title: data.title.trim(),
         description: data.description ?? null,
         status: "draft",
+        autoPlayMode: data.auto_play_mode ?? false,
+        enforceFocusMode: data.enforce_focus_mode ?? true,
       })
       .returning();
     if (!event) throw new QuizApiError("CREATE_FAILED", "Failed to create event. Please try again.", 500);
@@ -176,6 +178,10 @@ export async function updateQuizEvent(eventId: string, data: UpdateEventInput) {
   if (data.theme_id !== undefined) updates.themeId = data.theme_id ?? "default";
   if (data.custom_theme !== undefined) updates.customTheme = data.custom_theme;
   if (data.logo_url !== undefined) updates.logoUrl = data.logo_url;
+  if (data.auto_play_mode !== undefined) updates.autoPlayMode = data.auto_play_mode;
+  if (data.enforce_focus_mode !== undefined) {
+    updates.enforceFocusMode = data.enforce_focus_mode;
+  }
 
   try {
     const [event] = await db
@@ -792,6 +798,8 @@ function serializeSessionWithEvent(
       join_code: event.joinCode,
       theme_id: event.themeId,
       custom_theme: event.customTheme,
+      auto_play_mode: event.autoPlayMode,
+      enforce_focus_mode: event.enforceFocusMode,
       questions: [...event.questions]
         .sort((a, b) => a.position - b.position)
         .map((q) => ({

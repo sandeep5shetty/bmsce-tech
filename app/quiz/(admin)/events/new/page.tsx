@@ -20,12 +20,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { QuizEventBehaviorSettings } from "@/features/quiz/components/quiz-event-behavior-settings";
 
 export default function NewQuizEventPage() {
   const router = useRouter();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [autoPlayMode, setAutoPlayMode] = useState(false);
+  const [enforceFocusMode, setEnforceFocusMode] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const [errors, setErrors] = useState<{
@@ -66,6 +69,8 @@ export default function NewQuizEventPage() {
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim() || undefined,
+          auto_play_mode: autoPlayMode,
+          enforce_focus_mode: enforceFocusMode,
         }),
       });
 
@@ -189,6 +194,13 @@ export default function NewQuizEventPage() {
                   {description.length}/500
                 </p>
               </div>
+
+              <QuizEventBehaviorSettings
+                autoPlayMode={autoPlayMode}
+                onAutoPlayModeChange={setAutoPlayMode}
+                enforceFocusMode={enforceFocusMode}
+                onEnforceFocusModeChange={setEnforceFocusMode}
+              />
             </CardContent>
 
             <CardFooter className="flex gap-3">

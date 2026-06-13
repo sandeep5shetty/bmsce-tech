@@ -34,6 +34,8 @@ interface SessionData {
     join_code: string | null
     theme_id: string | null
     custom_theme: CustomTheme | null
+    auto_play_mode: boolean
+    enforce_focus_mode: boolean
     questions: Array<{
       id: string
       position: number
@@ -118,8 +120,13 @@ export default function PresentPage() {
   // Guards so auto-advance fires at most once per state transition
   const autoAdvancedQuestionIdRef = useRef<string | null>(null)
   const autoAdvancedResultsIdRef = useRef<string | null>(null)
+  const autoAdvancedLeaderboardIdRef = useRef<string | null>(null)
   const sessionRef = useRef<SessionData | null>(null)
   sessionRef.current = session
+
+  const autoPlayMode = session?.events?.auto_play_mode ?? false
+  const AUTO_PLAY_DWELL_MS = 2500
+  const RESULTS_DWELL_MS = autoPlayMode ? AUTO_PLAY_DWELL_MS : 6000
 
   // Load session data
   useEffect(() => {
@@ -395,6 +402,26 @@ export default function PresentPage() {
     return () => clearTimeout(t)
   }, [sessionStatus, currentQuestion, questionStartedAt, handleAdvance])
 
+  // Auto-play: advance question → results when every participant has answered.
+  useEffect(() => {
+    if (!autoPlayMode) return
+    if (sessionStatus !== "question") return
+    if (!currentQuestion) return
+    if (totalParticipants <= 0) return
+    if (answeredCount < totalParticipants) return
+    if (autoAdvancedQuestionIdRef.current === currentQuestion.id) return
+
+    autoAdvancedQuestionIdRef.current = currentQuestion.id
+    handleAdvance()
+  }, [
+    autoPlayMode,
+    sessionStatus,
+    currentQuestion,
+    totalParticipants,
+    answeredCount,
+    handleAdvance,
+  ])
+
   // Auto-advance results → leaderboard after a brief dwell so participants
   // and the presenter can read the correct answer and per-option breakdown.
   useEffect(() => {
@@ -402,7 +429,6 @@ export default function PresentPage() {
     if (!resultsData) return
     if (autoAdvancedResultsIdRef.current === resultsData.questionId) return
 
-    const RESULTS_DWELL_MS = 6000
     const t = setTimeout(() => {
       if (autoAdvancedResultsIdRef.current === resultsData.questionId) return
       autoAdvancedResultsIdRef.current = resultsData.questionId
@@ -410,7 +436,39 @@ export default function PresentPage() {
     }, RESULTS_DWELL_MS)
 
     return () => clearTimeout(t)
-  }, [sessionStatus, resultsData, handleAdvance])
+  }, [sessionStatus, resultsData, handleAdvance, RESULTS_DWELL_MS])
+
+  // Auto-play: advance leaderboard → next question after a short dwell.
+  useEffect(() => {
+    if (!autoPlayMode) return
+    if (sessionStatus !== "leaderboard") return
+    if (!leaderboardData) return
+
+    const questionId =
+      resultsData?.questionId ??
+      currentQuestion?.id ??
+      session?.current_question_id ??
+      null
+    if (!questionId) return
+    if (autoAdvancedLeaderboardIdRef.current === questionId) return
+
+    const t = setTimeout(() => {
+      if (autoAdvancedLeaderboardIdRef.current === questionId) return
+      autoAdvancedLeaderboardIdRef.current = questionId
+      handleAdvance()
+    }, AUTO_PLAY_DWELL_MS)
+
+    return () => clearTimeout(t)
+  }, [
+    autoPlayMode,
+    sessionStatus,
+    leaderboardData,
+    resultsData,
+    currentQuestion,
+    session,
+    handleAdvance,
+    AUTO_PLAY_DWELL_MS,
+  ])
 
   const handleStartQuiz = useCallback(async () => {
     setStartError(null)

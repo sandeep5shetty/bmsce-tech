@@ -20,6 +20,7 @@ import {
   resolvePrimaryHex,
   type CustomTheme,
 } from "@/features/quiz/lib/themes"
+import { QuizEventBehaviorSettings } from "@/features/quiz/components/quiz-event-behavior-settings"
 
 interface EventData {
   id: string
@@ -28,6 +29,8 @@ interface EventData {
   theme_id: string | null
   custom_theme: CustomTheme | null
   logo_url: string | null
+  auto_play_mode: boolean
+  enforce_focus_mode: boolean
 }
 
 /**
@@ -59,6 +62,8 @@ export default function EventEditPage() {
   const [customPrimary, setCustomPrimary] = useState("")
   const [selectedGradient, setSelectedGradient] = useState<string>("")
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [autoPlayMode, setAutoPlayMode] = useState(false)
+  const [enforceFocusMode, setEnforceFocusMode] = useState(true)
 
   useEffect(() => {
     fetch(`/api/quiz/v1/events/${eventId}`)
@@ -73,6 +78,8 @@ export default function EventEditPage() {
         setCustomPrimary(ev.custom_theme?.primaryColor ?? "")
         setSelectedGradient(ev.custom_theme?.gradient ?? "")
         setLogoUrl(ev.logo_url ?? null)
+        setAutoPlayMode(ev.auto_play_mode ?? false)
+        setEnforceFocusMode(ev.enforce_focus_mode ?? true)
       })
       .catch(() => toast.error("Failed to load event."))
       .finally(() => setLoading(false))
@@ -120,6 +127,8 @@ export default function EventEditPage() {
         theme_id: selectedThemeId,
         custom_theme: customTheme,
         logo_url: logoUrl,
+        auto_play_mode: autoPlayMode,
+        enforce_focus_mode: enforceFocusMode,
       }
 
       const res = await fetch(`/api/quiz/v1/events/${eventId}`, {
@@ -238,6 +247,20 @@ export default function EventEditPage() {
                 {description.length}/500
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Quiz Behavior</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <QuizEventBehaviorSettings
+              autoPlayMode={autoPlayMode}
+              onAutoPlayModeChange={setAutoPlayMode}
+              enforceFocusMode={enforceFocusMode}
+              onEnforceFocusModeChange={setEnforceFocusMode}
+            />
           </CardContent>
         </Card>
 
