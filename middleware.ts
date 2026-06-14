@@ -7,6 +7,7 @@ const PROTECTED_PREFIXES = [
   "/random-picker",
   "/dashboard",
   "/quiz",
+  "/smartform",
 ];
 
 const QUIZ_PUBLIC_PREFIXES = ["/quiz/join", "/quiz/play"];
@@ -61,5 +62,6 @@ export const config = {
     "/quiz",
     "/quiz/events/:path*",
     "/quiz/sessions/:path*",
+    "/smartform/:path*",
   ],
 };
