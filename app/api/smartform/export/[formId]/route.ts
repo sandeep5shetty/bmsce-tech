@@ -42,6 +42,7 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
   const rows = responses.map((r) => {
     const answers = r.answers as Record<string, unknown>;
     const row: Record<string, unknown> = {};
+    row["Email"] = answers._email ?? "";
     for (const field of fields) {
       row[field.label] = answers[field.id] ?? "";
     }

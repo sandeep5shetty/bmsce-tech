@@ -1,3 +1,6 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+
 import { eq } from "drizzle-orm";
 
 import {
@@ -8,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+import { auth } from "@/lib/auth";
 import db from "@/db";
 import { smartForm } from "@/db/schema";
 import type { SmartFormSchema } from "@/actions/smartform";
@@ -18,6 +22,11 @@ type PageProps = { params: Promise<{ formId: string }> };
 
 export default async function FormFillPage({ params }: PageProps) {
   const { formId } = await params;
+
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) {
+    redirect(`/auth/login?callbackUrl=/smartform/${formId}`);
+  }
 
   const form = await db.query.smartForm.findFirst({
     where: eq(smartForm.id, formId),
@@ -57,7 +66,11 @@ export default async function FormFillPage({ params }: PageProps) {
           )}
         </CardHeader>
         <CardContent>
-          <SmartFormFill formId={form.id} schema={schema} />
+          <SmartFormFill
+            formId={form.id}
+            schema={schema}
+            userEmail={session.user.email}
+          />
         </CardContent>
       </Card>
     </div>

@@ -75,7 +75,11 @@ export function CoordinatorSetup() {
               autoComplete="off"
             />
           </div>
-          <Button type="submit" className="w-full" disabled={loading || !code.trim()}>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={loading || !code.trim()}
+          >
             {loading ? "Verifying..." : "Unlock Coordinator Mode"}
           </Button>
         </form>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Briefcase, ClipboardList, HelpCircle, Users } from "lucide-react";
+import { Briefcase, ClipboardList, FileText, HelpCircle, Users } from "lucide-react";
 
 import { FeatureCard } from "./feature-card";
 
@@ -18,6 +18,13 @@ const features = [
       "Create polls, share join links, and collect responses from your class.",
     href: "/questions",
     icon: ClipboardList,
+  },
+  {
+    title: "SmartForm",
+    description:
+      "Fill out forms shared by coordinators and view all your past submissions.",
+    href: "/smartform/submissions",
+    icon: FileText,
   },
   {
     title: "Random Picker",

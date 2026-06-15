@@ -7,6 +7,9 @@ import { auth } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   let body: unknown;
   try {
@@ -20,15 +23,21 @@ export async function POST(request: NextRequest) {
   if (!formId || typeof formId !== "string") {
     return NextResponse.json({ error: "formId is required" }, { status: 400 });
   }
-  if (!answers || typeof answers !== "object") {
+  if (!answers || typeof answers !== "object" || Array.isArray(answers)) {
     return NextResponse.json({ error: "answers is required" }, { status: 400 });
   }
+
+  // Inject user email as the first answer so every submission is traceable
+  const enrichedAnswers = {
+    _email: session.user.email,
+    ...(answers as Record<string, unknown>),
+  };
 
   try {
     await db.insert(smartResponse).values({
       formId,
-      answers,
-      submittedBy: session?.user?.id ?? null,
+      answers: enrichedAnswers,
+      submittedBy: session.user.id,
     });
 
     return NextResponse.json({ success: true });
