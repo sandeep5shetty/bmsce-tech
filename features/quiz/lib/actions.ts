@@ -30,6 +30,7 @@ import { generateQuestionsWithAi } from "./ai-generate";
 import { QuizApiError, requireAdmin } from "./auth";
 import { broadcastSessionEvent } from "./realtime";
 import { calculateScore } from "./scoring";
+import { DEFAULT_QUIZ_THEME_ID } from "./themes";
 import type {
   CurrentQuestionPayload,
   LeaderboardEntry,
@@ -137,6 +138,7 @@ export async function createQuizEvent(data: CreateEventInput) {
         title: data.title.trim(),
         description: data.description ?? null,
         status: "draft",
+        themeId: DEFAULT_QUIZ_THEME_ID,
         autoPlayMode: data.auto_play_mode ?? false,
         enforceFocusMode: data.enforce_focus_mode ?? true,
       })
@@ -175,7 +177,7 @@ export async function updateQuizEvent(eventId: string, data: UpdateEventInput) {
   const updates: Partial<typeof quizEvent.$inferInsert> = {};
   if (data.title !== undefined) updates.title = data.title.trim();
   if (data.description !== undefined) updates.description = data.description;
-  if (data.theme_id !== undefined) updates.themeId = data.theme_id ?? "default";
+  if (data.theme_id !== undefined) updates.themeId = data.theme_id ?? DEFAULT_QUIZ_THEME_ID;
   if (data.custom_theme !== undefined) updates.customTheme = data.custom_theme;
   if (data.logo_url !== undefined) updates.logoUrl = data.logo_url;
   if (data.auto_play_mode !== undefined) updates.autoPlayMode = data.auto_play_mode;
@@ -754,7 +756,7 @@ export async function findQuizSessionByJoinCode(code: string) {
       ilike(quizEvent.joinCode, code.trim()),
       eq(quizEvent.status, "published"),
     ),
-    columns: { id: true, title: true },
+    columns: { id: true, title: true, logoUrl: true },
   });
 
   if (!event) {
@@ -779,7 +781,7 @@ export async function findQuizSessionByJoinCode(code: string) {
     );
   }
 
-  return { sessionId: session.id, eventTitle: event.title };
+  return { sessionId: session.id, eventTitle: event.title, logoUrl: event.logoUrl };
 }
 
 function serializeSessionWithEvent(
@@ -796,6 +798,7 @@ function serializeSessionWithEvent(
       id: event.id,
       title: event.title,
       join_code: event.joinCode,
+      logo_url: event.logoUrl,
       theme_id: event.themeId,
       custom_theme: event.customTheme,
       auto_play_mode: event.autoPlayMode,
@@ -1252,14 +1255,6 @@ export async function joinQuizSession(
     .from(quizSessionParticipant)
     .where(eq(quizSessionParticipant.sessionId, sessionId));
 
-  if (participantCount >= 150) {
-    throw new QuizApiError(
-      "SESSION_AT_CAPACITY",
-      "This session has reached its maximum capacity of 150 participants.",
-      409,
-    );
-  }
-
   if (!validateDisplayName(data.displayName)) {
     throw new QuizApiError(
       "VALIDATION_ERROR",
@@ -1269,21 +1264,45 @@ export async function joinQuizSession(
     );
   }
 
-  const nameTaken = await db.query.quizSessionParticipant.findFirst({
+  const trimmedName = data.displayName.trim();
+
+  const existingByName = await db.query.quizSessionParticipant.findFirst({
     where: and(
       eq(quizSessionParticipant.sessionId, sessionId),
-      eq(quizSessionParticipant.displayName, data.displayName),
+      eq(quizSessionParticipant.displayName, trimmedName),
     ),
     columns: { id: true },
   });
 
-  if (nameTaken) {
+  const replacingExisting = Boolean(existingByName && session.status === "lobby");
+
+  if (!replacingExisting && participantCount >= 150) {
     throw new QuizApiError(
-      "DISPLAY_NAME_TAKEN",
-      "This display name is already taken in this session. Please choose a different name.",
+      "SESSION_AT_CAPACITY",
+      "This session has reached its maximum capacity of 150 participants.",
       409,
-      "displayName",
     );
+  }
+
+  if (existingByName) {
+    if (session.status !== "lobby") {
+      throw new QuizApiError(
+        "DISPLAY_NAME_TAKEN",
+        "This display name is already taken in this session. Please choose a different name.",
+        409,
+        "displayName",
+      );
+    }
+
+    await db
+      .delete(quizSessionParticipant)
+      .where(eq(quizSessionParticipant.id, existingByName.id));
+
+    await broadcastSessionEvent(sessionId, "participant_removed", {
+      participantId: existingByName.id,
+      reason: "replaced",
+    });
+    await broadcastParticipantCounts(sessionId);
   }
 
   const participantToken = crypto.randomUUID();
@@ -1293,7 +1312,7 @@ export async function joinQuizSession(
       .insert(quizSessionParticipant)
       .values({
         sessionId,
-        displayName: data.displayName,
+        displayName: trimmedName,
         avatar: data.avatar,
         participantToken,
       })
@@ -1307,12 +1326,15 @@ export async function joinQuizSession(
       );
     }
 
+    await broadcastParticipantCounts(sessionId);
+
     return {
       participantToken,
       participantId: participant.id,
       sessionId,
-      displayName: data.displayName,
+      displayName: trimmedName,
       avatar: data.avatar,
+      replacedPrevious: replacingExisting,
     };
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -1683,6 +1705,137 @@ export async function exportQuizAnalyticsCsv(sessionId: string) {
   return generateSessionCsv(sessionId);
 }
 
+function countConsecutiveMissedQuestions(
+  answeredQuestionIds: Set<string>,
+  playedQuestionIds: string[],
+): number {
+  if (playedQuestionIds.length === 0) return 0;
+
+  let missed = 0;
+  for (let i = playedQuestionIds.length - 1; i >= 0; i--) {
+    const questionId = playedQuestionIds[i];
+    if (!questionId || answeredQuestionIds.has(questionId)) break;
+    missed++;
+  }
+  return missed;
+}
+
+export async function listQuizSessionParticipants(sessionId: string) {
+  const admin = await requireAdmin();
+
+  const session = await db.query.quizSession.findFirst({
+    where: eq(quizSession.id, sessionId),
+    columns: {
+      id: true,
+      adminId: true,
+      eventId: true,
+      currentQuestionIndex: true,
+    },
+  });
+
+  if (!session) {
+    throw new QuizApiError("SESSION_NOT_FOUND", "Session not found.", 404);
+  }
+
+  if (session.adminId !== admin.id) {
+    throw new QuizApiError(
+      "FORBIDDEN",
+      "You are not the admin of this session.",
+      403,
+    );
+  }
+
+  const [participants, questions, answers] = await Promise.all([
+    db.query.quizSessionParticipant.findMany({
+      where: eq(quizSessionParticipant.sessionId, sessionId),
+      columns: {
+        id: true,
+        displayName: true,
+        avatar: true,
+        totalScore: true,
+        createdAt: true,
+      },
+      orderBy: asc(quizSessionParticipant.displayName),
+    }),
+    db.query.quizQuestion.findMany({
+      where: eq(quizQuestion.eventId, session.eventId),
+      columns: { id: true, position: true },
+      orderBy: asc(quizQuestion.position),
+    }),
+    db.query.quizParticipantAnswer.findMany({
+      where: eq(quizParticipantAnswer.sessionId, sessionId),
+      columns: { participantId: true, questionId: true },
+    }),
+  ]);
+
+  const answersByParticipant = new Map<string, Set<string>>();
+  for (const answer of answers) {
+    const existing = answersByParticipant.get(answer.participantId) ?? new Set();
+    existing.add(answer.questionId);
+    answersByParticipant.set(answer.participantId, existing);
+  }
+
+  const currentIdx = session.currentQuestionIndex ?? -1;
+  const playedQuestionIds =
+    currentIdx >= 0 ? questions.slice(0, currentIdx + 1).map((q) => q.id) : [];
+
+  return {
+    participants: participants.map((p) => {
+      const consecutiveMissedQuestions = countConsecutiveMissedQuestions(
+        answersByParticipant.get(p.id) ?? new Set(),
+        playedQuestionIds,
+      );
+
+      return {
+        participantId: p.id,
+        displayName: p.displayName,
+        avatar: p.avatar,
+        totalScore: p.totalScore,
+        joinedAt: p.createdAt.toISOString(),
+        consecutiveMissedQuestions,
+      };
+    }),
+  };
+}
+
+async function broadcastParticipantCounts(sessionId: string) {
+  const session = await db.query.quizSession.findFirst({
+    where: eq(quizSession.id, sessionId),
+    columns: { status: true, currentQuestionId: true },
+  });
+
+  const [{ value: totalParticipants }] = await db
+    .select({ value: count() })
+    .from(quizSessionParticipant)
+    .where(eq(quizSessionParticipant.sessionId, sessionId));
+
+  let answeredCount = 0;
+  if (session?.currentQuestionId) {
+    const [{ value }] = await db
+      .select({ value: count() })
+      .from(quizParticipantAnswer)
+      .where(
+        and(
+          eq(quizParticipantAnswer.sessionId, sessionId),
+          eq(quizParticipantAnswer.questionId, session.currentQuestionId),
+        ),
+      );
+    answeredCount = value;
+  }
+
+  await broadcastSessionEvent(sessionId, "participants_updated", {
+    totalParticipants,
+  });
+
+  if (session?.status === "question" && session.currentQuestionId) {
+    await broadcastSessionEvent(sessionId, "answer_count_updated", {
+      questionId: session.currentQuestionId,
+      answeredCount,
+      totalParticipants,
+    });
+  }
+}
+
 export async function removeQuizParticipant(
   sessionId: string,
   participantToken: string,
@@ -1703,30 +1856,76 @@ export async function removeQuizParticipant(
     .delete(quizSessionParticipant)
     .where(eq(quizSessionParticipant.id, participant.id));
 
-  return { removed: true };
+  await broadcastSessionEvent(sessionId, "participant_removed", {
+    participantId: participant.id,
+  });
+  await broadcastParticipantCounts(sessionId);
+
+  return { removed: true, participantId: participant.id };
 }
 
-export async function updateQuizParticipantAvatar(
+export async function removeQuizParticipantByAdmin(
   sessionId: string,
-  participantToken: string,
-  avatar: string,
+  participantId: string,
 ) {
-  const trimmedAvatar = avatar.trim();
-  if (!trimmedAvatar) {
+  const admin = await requireAdmin();
+
+  const session = await db.query.quizSession.findFirst({
+    where: eq(quizSession.id, sessionId),
+    columns: { id: true, adminId: true, status: true },
+  });
+
+  if (!session) {
+    throw new QuizApiError("SESSION_NOT_FOUND", "Session not found.", 404);
+  }
+
+  if (session.adminId !== admin.id) {
     throw new QuizApiError(
-      "VALIDATION_ERROR",
-      "avatar is required.",
-      400,
-      "avatar",
+      "FORBIDDEN",
+      "You are not the admin of this session.",
+      403,
     );
   }
 
   const participant = await db.query.quizSessionParticipant.findFirst({
     where: and(
-      eq(quizSessionParticipant.participantToken, participantToken),
+      eq(quizSessionParticipant.id, participantId),
       eq(quizSessionParticipant.sessionId, sessionId),
     ),
     columns: { id: true },
+  });
+
+  if (!participant) {
+    throw new QuizApiError(
+      "PARTICIPANT_NOT_FOUND",
+      "Participant not found.",
+      404,
+    );
+  }
+
+  await db
+    .delete(quizSessionParticipant)
+    .where(eq(quizSessionParticipant.id, participant.id));
+
+  await broadcastSessionEvent(sessionId, "participant_removed", {
+    participantId: participant.id,
+  });
+  await broadcastParticipantCounts(sessionId);
+
+  return { removed: true, participantId: participant.id };
+}
+
+export async function updateQuizParticipantProfile(
+  sessionId: string,
+  participantToken: string,
+  data: { displayName?: string; avatar?: string },
+) {
+  const participant = await db.query.quizSessionParticipant.findFirst({
+    where: and(
+      eq(quizSessionParticipant.participantToken, participantToken),
+      eq(quizSessionParticipant.sessionId, sessionId),
+    ),
+    columns: { id: true, displayName: true, avatar: true },
   });
 
   if (!participant) {
@@ -1745,24 +1944,116 @@ export async function updateQuizParticipantAvatar(
   if (session.status !== "lobby") {
     throw new QuizApiError(
       "SESSION_ALREADY_STARTED",
-      "Avatar can only be changed while waiting in the lobby.",
+      "Profile can only be changed while waiting in the lobby.",
       409,
     );
   }
 
-  const [updated] = await db
-    .update(quizSessionParticipant)
-    .set({ avatar: trimmedAvatar })
-    .where(eq(quizSessionParticipant.id, participant.id))
-    .returning({ avatar: quizSessionParticipant.avatar });
+  const updates: Partial<typeof quizSessionParticipant.$inferInsert> = {};
 
-  if (!updated) {
+  if (data.displayName !== undefined) {
+    const trimmedName = data.displayName.trim();
+    if (!validateDisplayName(trimmedName)) {
+      throw new QuizApiError(
+        "VALIDATION_ERROR",
+        "Display name must be 1–30 characters and may only contain letters, digits, spaces, hyphens, or underscores.",
+        400,
+        "displayName",
+      );
+    }
+
+    const nameTaken = await db.query.quizSessionParticipant.findFirst({
+      where: and(
+        eq(quizSessionParticipant.sessionId, sessionId),
+        eq(quizSessionParticipant.displayName, trimmedName),
+      ),
+      columns: { id: true },
+    });
+
+    if (nameTaken && nameTaken.id !== participant.id) {
+      throw new QuizApiError(
+        "DISPLAY_NAME_TAKEN",
+        "This display name is already taken in this session. Please choose a different name.",
+        409,
+        "displayName",
+      );
+    }
+
+    updates.displayName = trimmedName;
+  }
+
+  if (data.avatar !== undefined) {
+    const trimmedAvatar = data.avatar.trim();
+    if (!trimmedAvatar) {
+      throw new QuizApiError(
+        "VALIDATION_ERROR",
+        "avatar is required.",
+        400,
+        "avatar",
+      );
+    }
+    updates.avatar = trimmedAvatar;
+  }
+
+  if (Object.keys(updates).length === 0) {
     throw new QuizApiError(
-      "SERVER_ERROR",
-      "Failed to update avatar. Please try again.",
-      500,
+      "VALIDATION_ERROR",
+      "No valid fields provided for update.",
+      400,
     );
   }
 
-  return { avatar: updated.avatar };
+  try {
+    const [updated] = await db
+      .update(quizSessionParticipant)
+      .set(updates)
+      .where(eq(quizSessionParticipant.id, participant.id))
+      .returning({
+        displayName: quizSessionParticipant.displayName,
+        avatar: quizSessionParticipant.avatar,
+      });
+
+    if (!updated) {
+      throw new QuizApiError(
+        "SERVER_ERROR",
+        "Failed to update profile. Please try again.",
+        500,
+      );
+    }
+
+    const [{ value: totalParticipants }] = await db
+      .select({ value: count() })
+      .from(quizSessionParticipant)
+      .where(eq(quizSessionParticipant.sessionId, sessionId));
+    await broadcastSessionEvent(sessionId, "participants_updated", {
+      totalParticipants,
+    });
+
+    return {
+      participantId: participant.id,
+      displayName: updated.displayName,
+      avatar: updated.avatar,
+    };
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new QuizApiError(
+        "DISPLAY_NAME_TAKEN",
+        "This display name is already taken in this session. Please choose a different name.",
+        409,
+        "displayName",
+      );
+    }
+    throw error;
+  }
+}
+
+export async function updateQuizParticipantAvatar(
+  sessionId: string,
+  participantToken: string,
+  avatar: string,
+) {
+  const result = await updateQuizParticipantProfile(sessionId, participantToken, {
+    avatar,
+  });
+  return { avatar: result.avatar };
 }

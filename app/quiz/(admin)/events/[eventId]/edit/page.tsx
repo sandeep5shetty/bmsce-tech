@@ -11,10 +11,12 @@ import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { LoadingScreen } from "@/components/ui/loading-screen"
 import { QuizImageUpload } from "@/features/quiz/components/quiz-image-upload"
+import { QuizBrandLogo } from "@/features/quiz/components/quiz-brand-logo"
 import {
   BUILT_IN_THEMES,
   GRADIENT_PRESETS,
   buildParticipantThemeStyle,
+  DEFAULT_QUIZ_THEME_ID,
   getThemeById,
   resolveGradient,
   resolvePrimaryHex,
@@ -58,7 +60,7 @@ export default function EventEditPage() {
 
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [selectedThemeId, setSelectedThemeId] = useState<string>("violet")
+  const [selectedThemeId, setSelectedThemeId] = useState<string>(DEFAULT_QUIZ_THEME_ID)
   const [customPrimary, setCustomPrimary] = useState("")
   const [selectedGradient, setSelectedGradient] = useState<string>("")
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
@@ -74,7 +76,7 @@ export default function EventEditPage() {
         setEvent(ev)
         setTitle(ev.title ?? "")
         setDescription(ev.description ?? "")
-        setSelectedThemeId(ev.theme_id ?? "violet")
+        setSelectedThemeId(ev.theme_id ?? DEFAULT_QUIZ_THEME_ID)
         setCustomPrimary(ev.custom_theme?.primaryColor ?? "")
         setSelectedGradient(ev.custom_theme?.gradient ?? "")
         setLogoUrl(ev.logo_url ?? null)
@@ -176,33 +178,6 @@ export default function EventEditPage() {
         </div>
       </div>
 
-      {/* Live preview */}
-      <Card className="overflow-hidden" style={previewStyle}>
-        <div
-          className="px-6 py-8 text-white"
-          style={{ background: effectiveGradient }}
-        >
-          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider opacity-90 mb-2">
-            <Sparkles className="h-3.5 w-3.5" />
-            Live Preview
-          </div>
-          <h2 className="text-2xl font-bold drop-shadow-sm">{title || event?.title}</h2>
-          <p className="text-sm opacity-90 mt-1">
-            This is how your event header and cards will appear.
-          </p>
-        </div>
-        <CardContent className="pt-6 flex flex-wrap items-center gap-3">
-          <Button>Primary Action</Button>
-          <Button variant="outline">Secondary</Button>
-          <span
-            className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold text-white"
-            style={{ background: effectiveGradient }}
-          >
-            Live Badge
-          </span>
-        </CardContent>
-      </Card>
-
       <form onSubmit={handleSave} className="space-y-6">
         {/* Event details */}
         <Card>
@@ -277,7 +252,41 @@ export default function EventEditPage() {
               onChange={setLogoUrl}
               label="Logo"
               description="Square or landscape image, up to 4 MB."
+              variant="logo"
             />
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden" style={previewStyle}>
+          <div
+            className="px-6 py-8 text-white"
+            style={{ background: effectiveGradient }}
+          >
+            <div className="flex items-start gap-4">
+              <QuizBrandLogo logoUrl={logoUrl} size="xl" framed priority />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider opacity-90 mb-2">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Live Preview
+                </div>
+                <h2 className="text-2xl font-bold drop-shadow-sm break-words">
+                  {title || event?.title}
+                </h2>
+                <p className="text-sm opacity-90 mt-1">
+                  Event logo, header gradient, and theme colours as participants will see them.
+                </p>
+              </div>
+            </div>
+          </div>
+          <CardContent className="pt-6 flex flex-wrap items-center gap-3">
+            <Button type="button">Primary Action</Button>
+            <Button type="button" variant="outline">Secondary</Button>
+            <span
+              className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold text-white"
+              style={{ background: effectiveGradient }}
+            >
+              Live Badge
+            </span>
           </CardContent>
         </Card>
 
@@ -341,7 +350,7 @@ export default function EventEditPage() {
                 <input
                   id="custom-primary"
                   type="color"
-                  value={customPrimary || (getThemeById(selectedThemeId)?.primaryColor ?? "#7c3aed")}
+                  value={customPrimary || (getThemeById(selectedThemeId)?.primaryColor ?? getThemeById(DEFAULT_QUIZ_THEME_ID)?.primaryColor ?? "#0ea5e9")}
                   onChange={(e) => setCustomPrimary(e.target.value)}
                   className="h-10 w-16 rounded border border-input cursor-pointer"
                   aria-label="Custom primary colour"

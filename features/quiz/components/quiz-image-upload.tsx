@@ -8,13 +8,14 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 
-import { useUploadThing } from "@/lib/upload";
+import { resolveQuizMediaSrc } from "@/lib/s3/storage";
 
 interface QuizImageUploadProps {
   value: string | null;
   onChange: (url: string | null) => void;
   label?: string;
   description?: string;
+  variant?: "default" | "logo";
 }
 
 export function QuizImageUpload({
@@ -22,13 +23,9 @@ export function QuizImageUpload({
   onChange,
   label = "Image",
   description = "JPEG, PNG, GIF, or WebP up to 4 MB.",
+  variant = "default",
 }: QuizImageUploadProps) {
   const [uploading, setUploading] = useState(false);
-  const { startUpload } = useUploadThing("quizImageUploader", {
-    onUploadError: (error: Error) => {
-      toast.error(`Upload failed: ${error.message}`);
-    },
-  });
 
   const onDrop = useCallback(
     async (files: File[]) => {
@@ -37,14 +34,28 @@ export function QuizImageUpload({
 
       setUploading(true);
       try {
-        const res = await startUpload([file]);
-        const url = res?.[0]?.ufsUrl;
-        if (url) onChange(url);
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch("/api/quiz/v1/uploads/image", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          toast.error(data?.error?.message ?? "Upload failed.");
+          return;
+        }
+
+        if (data.url) onChange(data.url);
+      } catch {
+        toast.error("Upload failed. Please try again.");
       } finally {
         setUploading(false);
       }
     },
-    [startUpload, onChange],
+    [onChange],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -61,12 +72,22 @@ export function QuizImageUpload({
         <p className="text-xs text-muted-foreground">{description}</p>
       ) : null}
       {value ? (
-        <div className="relative inline-block">
+        <div
+          className={
+            variant === "logo"
+              ? "relative inline-block h-32 w-32 overflow-hidden rounded-xl border"
+              : "relative inline-block"
+          }
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={value}
+            src={resolveQuizMediaSrc(value) || value}
             alt=""
-            className="h-24 w-24 rounded-lg border object-cover"
+            className={
+              variant === "logo"
+                ? "h-32 w-32 rounded-xl object-cover"
+                : "h-24 w-24 rounded-lg border object-cover"
+            }
           />
           <Button
             type="button"

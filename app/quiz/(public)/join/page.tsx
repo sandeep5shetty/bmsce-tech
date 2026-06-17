@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Spinner } from "@/components/ui/spinner"
+import { QuizBrandLogo } from "@/features/quiz/components/quiz-brand-logo"
 
 /**
  * Join code entry page.
@@ -64,12 +65,14 @@ export default function JoinPage() {
     <div className="min-h-[100dvh] flex items-center justify-center bg-background px-4 py-8">
       <div className="w-full max-w-sm space-y-6 sm:space-y-8">
         {/* Brand */}
-        <div className="text-center">
-          <div className="text-4xl sm:text-5xl mb-2 sm:mb-3" aria-hidden="true">📋</div>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight">Join Quiz</h1>
-          <p className="mt-2 text-muted-foreground text-sm">
-            Enter the join code shown on the presenter&apos;s screen
-          </p>
+        <div className="text-center space-y-3">
+          <QuizBrandLogo size="hero" className="mx-auto" priority />
+          <div>
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight">Join Quiz</h1>
+            <p className="mt-2 text-muted-foreground text-sm">
+              Enter the join code shown on the presenter&apos;s screen
+            </p>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>

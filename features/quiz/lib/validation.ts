@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { BUILT_IN_THEMES } from "./themes";
+import { BUILT_IN_THEMES, DEFAULT_QUIZ_THEME_ID } from "./themes";
 
 export const VALID_QUESTION_TYPES = [
   "single_select",
@@ -167,6 +167,15 @@ export const joinSessionSchema = z.object({
   participantToken: z.string().optional(),
 });
 
+export const updateParticipantProfileSchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(30).optional(),
+    avatar: z.string().trim().min(1).optional(),
+  })
+  .refine((data) => data.displayName !== undefined || data.avatar !== undefined, {
+    message: "At least one of displayName or avatar is required.",
+  });
+
 export const submitAnswerSchema = z.object({
   questionId: z.string().min(1),
   selectedOptionIds: z.array(z.string()).optional(),
@@ -181,6 +190,9 @@ export type CreateQuestionInput = z.infer<typeof createQuestionSchema>;
 export type CreateSessionInput = z.infer<typeof createSessionSchema>;
 export type AdvanceSessionInput = z.infer<typeof advanceSessionSchema>;
 export type JoinSessionInput = z.infer<typeof joinSessionSchema>;
+export type UpdateParticipantProfileInput = z.infer<
+  typeof updateParticipantProfileSchema
+>;
 export type SubmitAnswerInput = z.infer<typeof submitAnswerSchema>;
 
 export const generateQuestionsSchema = z.object({

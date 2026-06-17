@@ -326,7 +326,7 @@ export const quizEvent = pgTable(
     status: text("status").notNull().default("draft"),
     joinCode: text("join_code").unique(),
     logoUrl: text("logo_url"),
-    themeId: text("theme_id").notNull().default("default"),
+    themeId: text("theme_id").notNull().default("ocean"),
     customTheme: jsonb("custom_theme"),
     anonymousMode: boolean("anonymous_mode").notNull().default(false),
     autoPlayMode: boolean("auto_play_mode").notNull().default(false),

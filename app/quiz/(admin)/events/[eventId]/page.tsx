@@ -13,6 +13,7 @@ import { AiQuestionGenerator } from "@/features/quiz/components/ai-question-gene
 import { JsonQuestionImporter } from "@/features/quiz/components/json-question-importer";
 import { PublishPanel } from "@/features/quiz/components/publish-panel";
 import { QuestionList } from "@/features/quiz/components/question-list";
+import { QuizBrandLogo } from "@/features/quiz/components/quiz-brand-logo";
 import type { Question } from "@/features/quiz/components/question-card";
 import { quizApiFetch } from "@/features/quiz/lib/server-fetch";
 import {
@@ -81,18 +82,21 @@ export default async function QuizEventPage({ params }: PageProps) {
 
       <div className="overflow-hidden rounded-2xl shadow-sm" style={{ background: gradient }}>
         <div className="flex items-start justify-between gap-4 px-6 py-7 text-white sm:px-8">
-          <div className="min-w-0">
-            <div className="mb-1.5 flex flex-wrap items-center gap-3">
-              <h1 className="font-serif truncate text-2xl font-bold tracking-wide drop-shadow-sm sm:text-3xl">
-                {event.title}
-              </h1>
-              <StatusBadge status={event.status} />
+          <div className="flex min-w-0 items-start gap-4">
+            <QuizBrandLogo logoUrl={event.logo_url} size="xl" framed />
+            <div className="min-w-0">
+              <div className="mb-1.5 flex flex-wrap items-center gap-3">
+                <h1 className="font-serif truncate text-2xl font-bold tracking-wide drop-shadow-sm sm:text-3xl">
+                  {event.title}
+                </h1>
+                <StatusBadge status={event.status} />
+              </div>
+              {event.description && (
+                <p className="line-clamp-2 text-sm text-white/90 drop-shadow-sm sm:text-base">
+                  {event.description}
+                </p>
+              )}
             </div>
-            {event.description && (
-              <p className="line-clamp-2 text-sm text-white/90 drop-shadow-sm sm:text-base">
-                {event.description}
-              </p>
-            )}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row">
             <Button

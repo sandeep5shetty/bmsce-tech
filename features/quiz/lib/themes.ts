@@ -14,6 +14,8 @@ export interface CustomTheme {
   gradient?: string;
 }
 
+export const DEFAULT_QUIZ_THEME_ID = "ocean";
+
 export const BUILT_IN_THEMES: HootTheme[] = [
   {
     id: "violet",
@@ -108,7 +110,7 @@ export function getThemeById(id: string | null | undefined): HootTheme | undefin
 }
 
 export function getDefaultTheme(): HootTheme {
-  return BUILT_IN_THEMES[0];
+  return getThemeById(DEFAULT_QUIZ_THEME_ID) ?? BUILT_IN_THEMES[0];
 }
 
 export function getGradientById(id: string | null | undefined): GradientPreset | undefined {

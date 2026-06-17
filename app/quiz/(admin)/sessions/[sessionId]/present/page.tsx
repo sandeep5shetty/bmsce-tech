@@ -8,10 +8,14 @@ import { QRCodeDisplay } from "@/features/quiz/components/qr-code-display"
 import { ConfirmActionDialog } from "@/features/quiz/components/confirm-action-dialog"
 import { QuizAdminToolbarPortal } from "@/features/quiz/components/quiz-admin-toolbar-portal"
 import { QuizAvatar } from "@/features/quiz/components/quiz-avatar"
+import { QuizFinalLeaderboard } from "@/features/quiz/components/quiz-final-leaderboard"
+import { PresenterBreakPanel } from "@/features/quiz/components/presenter-break-panel"
+import { QuizBrandLogo } from "@/features/quiz/components/quiz-brand-logo"
 import { SessionControlBar } from "@/features/quiz/components/session-control-bar"
 import { LoadingScreen } from "@/components/ui/loading-screen"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { UserX } from "lucide-react"
 import type { CustomTheme } from "@/features/quiz/lib/themes"
 
 interface Participant {
@@ -19,6 +23,15 @@ interface Participant {
   displayName: string
   avatar: string
   joinedAt: string
+}
+
+interface DbParticipant {
+  participantId: string
+  displayName: string
+  avatar: string
+  totalScore: number
+  joinedAt: string
+  consecutiveMissedQuestions: number
 }
 
 interface SessionData {
@@ -32,6 +45,7 @@ interface SessionData {
     id: string
     title: string
     join_code: string | null
+    logo_url: string | null
     theme_id: string | null
     custom_theme: CustomTheme | null
     auto_play_mode: boolean
@@ -103,6 +117,8 @@ export default function PresentPage() {
   const [session, setSession] = useState<SessionData | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [participants, setParticipants] = useState<Map<string, Participant>>(new Map())
+  const [dbParticipants, setDbParticipants] = useState<DbParticipant[]>([])
+  const [removingParticipantId, setRemovingParticipantId] = useState<string | null>(null)
   const [startError, setStartError] = useState<string | null>(null)
   const [sessionStatus, setSessionStatus] = useState<string>("lobby")
   const [currentQuestion, setCurrentQuestion] = useState<SessionData["events"] extends null ? null : NonNullable<SessionData["events"]>["questions"][0] | null>(null)
@@ -116,6 +132,8 @@ export default function PresentPage() {
   const [advancing, setAdvancing] = useState(false)
   const [endingSession, setEndingSession] = useState(false)
   const [endConfirmOpen, setEndConfirmOpen] = useState(false)
+  const [participantToRemove, setParticipantToRemove] = useState<DbParticipant | null>(null)
+  const [autoPlayPaused, setAutoPlayPaused] = useState(false)
 
   // Guards so auto-advance fires at most once per state transition
   const autoAdvancedQuestionIdRef = useRef<string | null>(null)
@@ -237,12 +255,6 @@ export default function PresentPage() {
           setWordCloudData([])
           setResultsData(null)
           setLeaderboardData(null)
-          // Sync totalParticipants from current presence count so the
-          // "X / Y answered" display is correct from the first answer
-          setParticipants((prev) => {
-            setTotalParticipants(prev.size)
-            return prev
-          })
         }
       })
       .on("broadcast", { event: "results_revealed" }, ({ payload }) => {
@@ -256,6 +268,13 @@ export default function PresentPage() {
         setAnsweredCount(p.answeredCount)
         setTotalParticipants(p.totalParticipants)
       })
+      .on("broadcast", { event: "participants_updated" }, ({ payload }) => {
+        const p = payload as { totalParticipants?: number }
+        if (typeof p.totalParticipants === "number") {
+          setTotalParticipants(p.totalParticipants)
+        }
+        void fetchDbParticipants()
+      })
       .on("broadcast", { event: "word_cloud_updated" }, ({ payload }) => {
         const p = payload as { questionId: string; words: Array<{ word: string; count: number }> }
         setWordCloudData(p.words)
@@ -264,6 +283,64 @@ export default function PresentPage() {
 
     return () => { supabase.removeChannel(channel) }
   }, [sessionId])
+
+  const fetchDbParticipants = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/quiz/v1/sessions/${sessionId}/participants`, {
+        cache: "no-store",
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      const list = (data.participants ?? []) as DbParticipant[]
+      setDbParticipants(list)
+      setTotalParticipants(list.length)
+    } catch {
+      // Best-effort
+    }
+  }, [sessionId])
+
+  useEffect(() => {
+    const refreshStates = ["lobby", "results", "leaderboard"]
+    if (!refreshStates.includes(sessionStatus)) return
+    void fetchDbParticipants()
+    const interval = setInterval(() => void fetchDbParticipants(), 3000)
+    return () => clearInterval(interval)
+  }, [sessionStatus, fetchDbParticipants])
+
+  useEffect(() => {
+    if (!["results", "leaderboard"].includes(sessionStatus)) {
+      setAutoPlayPaused(false)
+    }
+  }, [sessionStatus])
+
+  const handleRemoveParticipant = useCallback(
+    async (participantId: string): Promise<boolean> => {
+      setRemovingParticipantId(participantId)
+      try {
+        const res = await fetch(
+          `/api/quiz/v1/sessions/${sessionId}/participants/${participantId}`,
+          { method: "DELETE" },
+        )
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          toast.error(data?.error?.message ?? "Failed to remove participant.")
+          return false
+        }
+        setDbParticipants((prev) =>
+          prev.filter((p) => p.participantId !== participantId),
+        )
+        void fetchDbParticipants()
+        toast.success("Participant removed")
+        return true
+      } catch {
+        toast.error("Failed to remove participant.")
+        return false
+      } finally {
+        setRemovingParticipantId(null)
+      }
+    },
+    [sessionId, fetchDbParticipants],
+  )
 
   const handleAdvance = useCallback(async () => {
     setStartError(null)
@@ -318,11 +395,21 @@ export default function PresentPage() {
               setAnsweredCount(0)
               setResultsData(null)
               setLeaderboardData(null)
-              setParticipants((prev) => {
-                setTotalParticipants(prev.size)
-                return prev
-              })
             }
+          }
+          if (updatedSession.status === "question") {
+            void fetch(`/api/quiz/v1/sessions/${sessionId}/live`, { cache: "no-store" })
+              .then(async (res) => {
+                if (!res.ok) return
+                const live = await res.json()
+                if (typeof live.totalParticipants === "number") {
+                  setTotalParticipants(live.totalParticipants)
+                }
+                if (typeof live.answeredCount === "number") {
+                  setAnsweredCount(live.answeredCount)
+                }
+              })
+              .catch(() => undefined)
           }
         }
       }
@@ -427,6 +514,7 @@ export default function PresentPage() {
   useEffect(() => {
     if (sessionStatus !== "results") return
     if (!resultsData) return
+    if (autoPlayMode && autoPlayPaused) return
     if (autoAdvancedResultsIdRef.current === resultsData.questionId) return
 
     const t = setTimeout(() => {
@@ -436,11 +524,12 @@ export default function PresentPage() {
     }, RESULTS_DWELL_MS)
 
     return () => clearTimeout(t)
-  }, [sessionStatus, resultsData, handleAdvance, RESULTS_DWELL_MS])
+  }, [sessionStatus, resultsData, handleAdvance, RESULTS_DWELL_MS, autoPlayMode, autoPlayPaused])
 
   // Auto-play: advance leaderboard → next question after a short dwell.
   useEffect(() => {
     if (!autoPlayMode) return
+    if (autoPlayPaused) return
     if (sessionStatus !== "leaderboard") return
     if (!leaderboardData) return
 
@@ -461,6 +550,7 @@ export default function PresentPage() {
     return () => clearTimeout(t)
   }, [
     autoPlayMode,
+    autoPlayPaused,
     sessionStatus,
     leaderboardData,
     resultsData,
@@ -526,7 +616,9 @@ export default function PresentPage() {
   }, [sessionId, router])
 
   const participantList = Array.from(participants.values())
-  const participantCount = participantList.length
+  const lobbyParticipantCount = dbParticipants.length
+  const participantCount =
+    sessionStatus === "lobby" ? lobbyParticipantCount : totalParticipants
   const joinCode = session?.events?.join_code ?? null
   const joinUrl = joinCode
     ? `${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/quiz/join/${joinCode}`
@@ -618,6 +710,42 @@ export default function PresentPage() {
     />
   )
 
+  const removeParticipantDialog = (
+    <ConfirmActionDialog
+      open={participantToRemove !== null}
+      onOpenChange={(open) => {
+        if (!open) setParticipantToRemove(null)
+      }}
+      title="Remove participant?"
+      description={
+        participantToRemove
+          ? sessionStatus === "lobby"
+            ? `Remove ${participantToRemove.displayName} from the lobby? They will need to join again to re-enter the quiz.`
+            : `Remove ${participantToRemove.displayName} from the session? They will be disconnected immediately.`
+          : "Remove this participant from the session?"
+      }
+      confirmLabel="Remove"
+      onConfirm={async () => {
+        if (!participantToRemove) return
+        const removed = await handleRemoveParticipant(participantToRemove.participantId)
+        if (removed) setParticipantToRemove(null)
+      }}
+      loading={removingParticipantId !== null}
+      destructive
+    />
+  )
+
+  const breakPanel = (
+    <PresenterBreakPanel
+      participants={dbParticipants}
+      autoPlayMode={autoPlayMode}
+      autoPlayPaused={autoPlayPaused}
+      onToggleAutoPlayPause={() => setAutoPlayPaused((paused) => !paused)}
+      onRemoveParticipant={setParticipantToRemove}
+      removingParticipantId={removingParticipantId}
+    />
+  )
+
   // ── Question ───────────────────────────────────────────────────────────────
   if (sessionStatus === "question" && currentQuestion) {
     const isOpenText = currentQuestion.question_type === "open_text"
@@ -653,6 +781,7 @@ export default function PresentPage() {
       return (
         <>
           {endSessionDialog}
+          {removeParticipantDialog}
           {sessionControlBar}
           <div className="flex min-h-full flex-col bg-background">
             <LoadingScreen variant="section" label="Loading results…" emoji="📊" />
@@ -665,9 +794,17 @@ export default function PresentPage() {
     return (
       <>
         {endSessionDialog}
+        {removeParticipantDialog}
         {sessionControlBar}
         <div className="flex min-h-full flex-col bg-background">
-          <ResultsView resultsData={resultsData} question={q ?? null} />
+          <div className="max-w-6xl mx-auto w-full px-6 py-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2">
+                <ResultsView resultsData={resultsData} question={q ?? null} />
+              </div>
+              {breakPanel}
+            </div>
+          </div>
         </div>
       </>
     )
@@ -676,14 +813,33 @@ export default function PresentPage() {
   // ── Leaderboard ────────────────────────────────────────────────────────────
   if (sessionStatus === "leaderboard") {
     if (!leaderboardData) {
-      return <LoadingScreen label="Loading leaderboard…" emoji="🏆" />
+      return (
+        <>
+          {endSessionDialog}
+          {removeParticipantDialog}
+          {sessionControlBar}
+          <LoadingScreen label="Loading leaderboard…" emoji="🏆" />
+        </>
+      )
     }
+    const activeParticipantIds = new Set(dbParticipants.map((p) => p.participantId))
+    const visibleEntries = leaderboardData.entries
+      .filter((entry) => activeParticipantIds.has(entry.participantId))
+      .slice(0, 10)
     return (
       <>
         {endSessionDialog}
+        {removeParticipantDialog}
         {sessionControlBar}
         <div className="flex min-h-full flex-col bg-background">
-          <LeaderboardView entries={leaderboardData.entries.slice(0, 10)} isFinal={false} />
+          <div className="max-w-6xl mx-auto w-full px-6 py-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2">
+                <LeaderboardView entries={visibleEntries} isFinal={false} />
+              </div>
+              {breakPanel}
+            </div>
+          </div>
         </div>
       </>
     )
@@ -698,7 +854,7 @@ export default function PresentPage() {
         {endSessionDialog}
         {sessionControlBar}
         <div className="flex min-h-full flex-col bg-background">
-          <FinalLeaderboardView entries={leaderboardData.entries} />
+          <QuizFinalLeaderboard entries={leaderboardData.entries} />
         </div>
       </>
     )
@@ -729,15 +885,25 @@ export default function PresentPage() {
   return (
     <>
       {endSessionDialog}
+      {removeParticipantDialog}
       {sessionControlBar}
       <div className="flex min-h-full flex-col bg-background">
         <div className="max-w-5xl mx-auto px-6 py-8 space-y-8 w-full">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{session.events?.title ?? "Session"}</h1>
-            <p className="text-muted-foreground text-sm mt-1">Lobby — waiting for participants</p>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <QuizBrandLogo
+              logoUrl={session.events?.logo_url}
+              size="xl"
+              framed
+            />
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold tracking-tight truncate">
+                {session.events?.title ?? "Session"}
+              </h1>
+              <p className="text-muted-foreground text-sm mt-1">Lobby — waiting for participants</p>
+            </div>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800" aria-live="polite">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-3 py-1 text-xs font-medium text-green-700 dark:text-green-400" aria-live="polite">
             <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" aria-hidden="true" />
             {participantCount} participant{participantCount !== 1 ? "s" : ""}
           </span>
@@ -761,9 +927,9 @@ export default function PresentPage() {
               {startError && <p role="alert" className="text-sm text-destructive text-center">{startError}</p>}
               <Button
                 onClick={handleStartQuiz}
-                disabled={participantCount === 0 || advancing}
+                disabled={lobbyParticipantCount === 0 || advancing}
                 className="site-theme h-auto w-full rounded-xl px-6 py-4 text-base font-bold"
-                aria-disabled={participantCount === 0 || advancing}
+                aria-disabled={lobbyParticipantCount === 0 || advancing}
               >
                 {advancing ? (
                   <>
@@ -774,24 +940,32 @@ export default function PresentPage() {
                   "Start Quiz"
                 )}
               </Button>
-              {participantCount === 0 && <p className="text-xs text-muted-foreground text-center" role="status">Waiting for at least 1 participant to join</p>}
+              {lobbyParticipantCount === 0 && <p className="text-xs text-muted-foreground text-center" role="status">Waiting for at least 1 participant to join</p>}
             </div>
           </div>
 
           <div className="lg:col-span-2">
             <div className="rounded-xl border bg-card p-6 min-h-[300px]">
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">Participants ({participantCount})</h2>
-              {participantCount === 0 ? (
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">Participants ({lobbyParticipantCount})</h2>
+              {lobbyParticipantCount === 0 ? (
                 <div className="flex flex-col items-center justify-center h-48 text-center space-y-3">
                   <div className="text-4xl" aria-hidden="true">👋</div>
                   <p className="text-muted-foreground text-sm">No participants yet. Share the join code!</p>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2" role="list" aria-label="Joined participants" aria-live="polite" aria-atomic="false">
-                  {participantList.map((p) => (
+                  {dbParticipants.map((p) => (
                     <div key={p.participantId} role="listitem" className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-sm font-medium">
                       <QuizAvatar emoji={p.avatar} size="sm" />
                       <span>{p.displayName}</span>
+                      <button
+                        type="button"
+                        onClick={() => setParticipantToRemove(p)}
+                        className="rounded-full p-0.5 px-2  cursor-pointer text-destructive   transition-colors hover:bg-destructive/10 hover:text-destructive transition-all duration-300 "
+                        aria-label={`Remove ${p.displayName}`}
+                      >
+                        <UserX className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -1008,85 +1182,6 @@ function LeaderboardView({ entries, isFinal }: { entries: LeaderboardEntry[]; is
   )
 }
 
-function FinalLeaderboardView({ entries }: { entries: LeaderboardEntry[] }) {
-  const confettiFiredRef = useRef(false)
-
-  useEffect(() => {
-    if (confettiFiredRef.current) return
-    confettiFiredRef.current = true
-    // Dynamically import canvas-confetti to avoid SSR issues
-    import("canvas-confetti").then((mod) => {
-      const confetti = mod.default
-      const end = Date.now() + 5000 // 5 seconds max
-      const frame = () => {
-        confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 } })
-        confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 } })
-        if (Date.now() < end) requestAnimationFrame(frame)
-      }
-      frame()
-    })
-  }, [])
-
-  const top3 = entries.slice(0, 3)
-  const rest = entries.slice(3)
-
-  return (
-    <div className="flex-1 max-w-2xl mx-auto w-full px-6 py-8 space-y-8">
-      <h2 className="text-3xl font-black text-center">🏆 Final Results</h2>
-
-      {/* Podium for top 3 */}
-      <div className="flex items-end justify-center gap-4">
-        {/* 2nd place */}
-        {top3[1] && (
-          <div className="flex flex-col items-center gap-2 flex-1">
-            <QuizAvatar emoji={top3[1].avatar} size="3xl" />
-            <p className="font-bold text-sm text-center truncate w-full">{top3[1].displayName}</p>
-            <p className="text-sm text-muted-foreground">{top3[1].totalScore.toLocaleString()}</p>
-            <div className="w-full h-20 rounded-t-xl bg-slate-300 flex items-center justify-center text-3xl font-black">🥈</div>
-          </div>
-        )}
-        {/* 1st place */}
-        {top3[0] && (
-          <div className="flex flex-col items-center gap-2 flex-1">
-            <QuizAvatar emoji={top3[0].avatar} size="hero" />
-            <p className="font-bold text-sm text-center truncate w-full">{top3[0].displayName}</p>
-            <p className="text-sm text-muted-foreground">{top3[0].totalScore.toLocaleString()}</p>
-            <div className="w-full h-28 rounded-t-xl bg-yellow-300 flex items-center justify-center text-3xl font-black">🥇</div>
-          </div>
-        )}
-        {/* 3rd place */}
-        {top3[2] && (
-          <div className="flex flex-col items-center gap-2 flex-1">
-            <QuizAvatar emoji={top3[2].avatar} size="3xl" />
-            <p className="font-bold text-sm text-center truncate w-full">{top3[2].displayName}</p>
-            <p className="text-sm text-muted-foreground">{top3[2].totalScore.toLocaleString()}</p>
-            <div className="w-full h-14 rounded-t-xl bg-amber-600 flex items-center justify-center text-3xl font-black">🥉</div>
-          </div>
-        )}
-      </div>
-
-      {/* Full ranked list */}
-      {rest.length > 0 && (
-        <div className="space-y-2">
-          {rest.map((entry) => (
-            <div key={entry.participantId} className="flex items-center gap-4 rounded-xl border bg-card px-4 py-3">
-              <span className="text-sm font-bold text-muted-foreground w-8 text-center">#{entry.rank}</span>
-              <QuizAvatar emoji={entry.avatar} size="xl" />
-              <span className="flex-1 font-medium truncate">{entry.displayName}</span>
-              <span className="font-bold">{entry.totalScore.toLocaleString()}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/**
- * WordCloudView — renders word frequencies as a proportional word cloud.
- * Font-size scales linearly from 14px (min) to 48px (max) based on count.
- * Requirements: 14.2, 14.3
- */
 function WordCloudView({ words }: { words: Array<{ word: string; count: number }> }) {
   if (words.length === 0) {
     return (

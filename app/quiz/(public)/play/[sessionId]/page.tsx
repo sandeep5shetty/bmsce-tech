@@ -8,10 +8,23 @@ import { LoadingScreen } from "@/components/ui/loading-screen"
 import { QuizFullscreenGuard } from "@/features/quiz/components/quiz-fullscreen-guard"
 import { QuizAvatar } from "@/features/quiz/components/quiz-avatar"
 import { QuizAvatarPicker } from "@/features/quiz/components/quiz-avatar-picker"
+import { QuizEventBrand } from "@/features/quiz/components/quiz-brand-logo"
+import { QuizFinalLeaderboard } from "@/features/quiz/components/quiz-final-leaderboard"
 import { useQuizFullscreen } from "@/features/quiz/hooks/use-quiz-fullscreen"
 import { DEFAULT_QUIZ_AVATAR } from "@/features/quiz/lib/quiz-avatars"
+import {
+  clearQuizParticipantCredentials,
+  getQuizAvatar,
+  getQuizDisplayName,
+  getQuizParticipantId,
+  getQuizParticipantToken,
+  updateQuizParticipantProfileStorage,
+} from "@/features/quiz/lib/participant-storage"
 import { buildParticipantThemeStyle, type CustomTheme } from "@/features/quiz/lib/themes"
 import type { RealtimeChannel } from "@supabase/supabase-js"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 
 interface SessionStatePayload {
   status: string
@@ -54,6 +67,12 @@ interface LeaderboardUpdatedPayload {
   entries: LeaderboardEntry[]
 }
 
+interface AnswerCountPayload {
+  questionId: string
+  answeredCount: number
+  totalParticipants: number
+}
+
 /**
  * Participant quiz screen — Client Component.
  *
@@ -73,24 +92,18 @@ export default function PlayPage() {
   const sessionId = params.sessionId
   const router = useRouter()
 
-  const [participantToken] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null
-    return sessionStorage.getItem("quiz_participant_token")
-  })
-  const [participantId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null
-    return sessionStorage.getItem("quiz_participant_id")
-  })
-  const [displayName] = useState<string>(() => {
-    if (typeof window === "undefined") return ""
-    return sessionStorage.getItem("quiz_display_name") ?? ""
-  })
-  const [avatar, setAvatar] = useState<string>(() => {
-    if (typeof window === "undefined") return DEFAULT_QUIZ_AVATAR
-    return sessionStorage.getItem("quiz_avatar") ?? DEFAULT_QUIZ_AVATAR
-  })
-  const [avatarUpdating, setAvatarUpdating] = useState(false)
+  const [participantToken] = useState<string | null>(() => getQuizParticipantToken())
+  const [participantId] = useState<string | null>(() => getQuizParticipantId())
+  const [displayName, setDisplayName] = useState<string>(() => getQuizDisplayName() ?? "")
+  const [avatar, setAvatar] = useState<string>(() => getQuizAvatar() ?? DEFAULT_QUIZ_AVATAR)
+  const [draftDisplayName, setDraftDisplayName] = useState("")
+  const [draftAvatar, setDraftAvatar] = useState<string | null>(null)
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const [answeredCount, setAnsweredCount] = useState(0)
+  const [totalParticipants, setTotalParticipants] = useState(0)
   const [sessionTitle, setSessionTitle] = useState<string>("")
+  const [eventLogoUrl, setEventLogoUrl] = useState<string | null>(null)
   const [sessionStatus, setSessionStatus] = useState<string>("lobby")
   const [currentQuestion, setCurrentQuestion] = useState<SessionStatePayload["currentQuestion"]>(null)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number | null>(null)
@@ -113,6 +126,8 @@ export default function PlayPage() {
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([])
 
   const channelRef = useRef<RealtimeChannel | null>(null)
+  const currentQuestionIdRef = useRef<string | null>(null)
+  currentQuestionIdRef.current = currentQuestion?.id ?? null
   // Reconnection state
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "reconnecting" | "failed">("connected")
   const reconnectAttemptsRef = useRef(0)
@@ -134,6 +149,7 @@ export default function PlayPage() {
         }
         const data = await res.json()
         setSessionTitle(data.session?.events?.title ?? "Quiz")
+        setEventLogoUrl(data.session?.events?.logo_url ?? null)
         setSessionStatus(data.session?.status ?? "lobby")
         setTotalQuestions(data.session?.events?.questions?.length ?? 0)
         setCurrentQuestionIndex(data.session?.current_question_index ?? null)
@@ -143,6 +159,11 @@ export default function PlayPage() {
       })
       .catch(() => setLoadError("Network error. Please refresh the page."))
   }, [sessionId, router, participantToken])
+
+  useEffect(() => {
+    setDraftDisplayName(displayName)
+    setDraftAvatar(avatar === DEFAULT_QUIZ_AVATAR ? null : avatar)
+  }, [displayName, avatar])
 
   // Apply the event's colour theme to this full-screen route by overriding the
   // theme CSS variables on the document root. Restores the previous values on
@@ -187,6 +208,7 @@ export default function PlayPage() {
           setSubmittedForQuestion(null)
           setResultsData(null)
           setLeaderboardData(null)
+          setAnsweredCount(0)
         }
       })
       .on("broadcast", { event: "results_revealed" }, ({ payload }) => {
@@ -194,6 +216,24 @@ export default function PlayPage() {
       })
       .on("broadcast", { event: "leaderboard_updated" }, ({ payload }) => {
         setLeaderboardData(payload as LeaderboardUpdatedPayload)
+      })
+      .on("broadcast", { event: "answer_count_updated" }, ({ payload }) => {
+        const p = payload as AnswerCountPayload
+        if (p.questionId !== currentQuestionIdRef.current) return
+        setAnsweredCount(p.answeredCount)
+        setTotalParticipants(p.totalParticipants)
+      })
+      .on("broadcast", { event: "participant_removed" }, ({ payload }) => {
+        const p = payload as { participantId?: string; reason?: string }
+        if (p.participantId && participantId && p.participantId === participantId) {
+          clearQuizParticipantCredentials()
+          if (p.reason === "replaced") {
+            toast.info("You've joined this session in another window.")
+          } else {
+            toast.error("You were removed from the session by the host.")
+          }
+          router.replace("/quiz/join")
+        }
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
@@ -275,7 +315,44 @@ export default function PlayPage() {
         reconnectTimerRef.current = null
       }
     }
-  }, [sessionId, participantToken, participantId, displayName, avatar])
+  }, [sessionId, participantToken, participantId, displayName, avatar, router])
+
+  useEffect(() => {
+    if (!participantToken) return
+    if (sessionStatus !== "question") return
+    if (!currentQuestion) return
+
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/quiz/v1/sessions/${sessionId}/live`, {
+          cache: "no-store",
+        })
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        if (data.currentQuestionId !== currentQuestion.id) return
+        setAnsweredCount((prev) =>
+          typeof data.answeredCount === "number" && data.answeredCount > prev
+            ? data.answeredCount
+            : prev,
+        )
+        setTotalParticipants((prev) =>
+          typeof data.totalParticipants === "number" && data.totalParticipants > prev
+            ? data.totalParticipants
+            : prev,
+        )
+      } catch {
+        // Best-effort
+      }
+    }
+
+    poll()
+    const interval = setInterval(poll, 2000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [sessionId, participantToken, sessionStatus, currentQuestion])
 
   // Poll session status as a fallback for missed Realtime broadcasts.
   // Only ever advances state forward, never backward, so it can run safely
@@ -362,9 +439,7 @@ export default function PlayPage() {
       method: "POST",
       headers: { Authorization: `Bearer ${participantToken}` },
     })
-    sessionStorage.removeItem("quiz_participant_token")
-    sessionStorage.removeItem("quiz_session_id")
-    sessionStorage.removeItem("quiz_participant_id")
+    clearQuizParticipantCredentials()
   }, [fullscreen.isRemoved, participantToken, sessionId])
 
   const submitAnswer = useCallback(async (optionIds: string[], questionId: string) => {
@@ -387,33 +462,80 @@ export default function PlayPage() {
     }
   }, [participantToken, sessionId, submittedForQuestion, fullscreen.isBlocking])
 
-  const handleAvatarSelect = useCallback(async (emoji: string) => {
-    if (!participantToken || avatarUpdating || sessionStatus !== "lobby") return
-    setAvatarUpdating(true)
+  const handleSaveProfile = useCallback(async () => {
+    if (!participantToken || profileSaving || sessionStatus !== "lobby") return
+
+    const trimmedName = draftDisplayName.trim()
+    const nextAvatar = draftAvatar ?? DEFAULT_QUIZ_AVATAR
+    const nameUnchanged = trimmedName === displayName.trim()
+    const avatarUnchanged = nextAvatar === avatar
+
+    if (nameUnchanged && avatarUnchanged) return
+    if (!trimmedName) {
+      setProfileError("Display name is required.")
+      return
+    }
+
+    setProfileSaving(true)
+    setProfileError(null)
     try {
-      const res = await fetch(`/api/quiz/v1/sessions/${sessionId}/avatar`, {
+      const body: Record<string, string> = {}
+      if (!nameUnchanged) body.displayName = trimmedName
+      if (!avatarUnchanged) body.avatar = nextAvatar
+
+      const res = await fetch(`/api/quiz/v1/sessions/${sessionId}/profile`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${participantToken}`,
         },
-        body: JSON.stringify({ avatar: emoji }),
+        body: JSON.stringify(body),
       })
-      if (!res.ok) return
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg =
+          data?.error?.code === "DISPLAY_NAME_TAKEN"
+            ? "This name is already taken. Choose a different name."
+            : data?.error?.message ?? "Failed to save profile."
+        setProfileError(msg)
+        toast.error(msg)
+        return
+      }
+
+      setDisplayName(data.displayName)
       setAvatar(data.avatar)
-      sessionStorage.setItem("quiz_avatar", data.avatar)
-      const presenceKey = participantId ?? participantToken.slice(0, 8)
-      await channelRef.current?.track({
-        participantId: presenceKey,
-        displayName: displayName || "Participant",
+      setDraftDisplayName(data.displayName)
+      setDraftAvatar(data.avatar === DEFAULT_QUIZ_AVATAR ? null : data.avatar)
+      updateQuizParticipantProfileStorage({
+        displayName: data.displayName,
         avatar: data.avatar,
-        joinedAt: new Date().toISOString(),
       })
+
+      const presenceKey = participantId ?? participantToken.slice(0, 8)
+      void channelRef.current
+        ?.track({
+          participantId: presenceKey,
+          displayName: data.displayName,
+          avatar: data.avatar,
+          joinedAt: new Date().toISOString(),
+        })
+        .catch(() => undefined)
+
+      toast.success("Profile saved")
     } finally {
-      setAvatarUpdating(false)
+      setProfileSaving(false)
     }
-  }, [participantToken, participantId, displayName, sessionId, sessionStatus, avatarUpdating])
+  }, [
+    participantToken,
+    participantId,
+    profileSaving,
+    sessionStatus,
+    draftDisplayName,
+    draftAvatar,
+    displayName,
+    avatar,
+    sessionId,
+  ])
 
   if (loadError) {
     return (
@@ -472,6 +594,8 @@ export default function PlayPage() {
         setSelectedOptionIds={setSelectedOptionIds}
         onSubmit={submitAnswer}
         interactionLocked={fullscreen.isBlocking}
+        answeredCount={answeredCount}
+        totalParticipants={totalParticipants}
       />
       </>
     )
@@ -524,7 +648,10 @@ export default function PlayPage() {
     return (
       <>
         <QuizFullscreenGuard active={focusEnforcementActive} state={fullscreen} />
-        <ParticipantLeaderboardView entries={leaderboardData.entries} participantId={participantId} isFinal={true} />
+        <QuizFinalLeaderboard
+          entries={leaderboardData.entries}
+          highlightParticipantId={participantId}
+        />
       </>
     )
   }
@@ -545,10 +672,24 @@ export default function PlayPage() {
       <QuizFullscreenGuard active={focusEnforcementActive} state={fullscreen} />
       <LobbyWaitingView
         sessionTitle={sessionTitle}
+        eventLogoUrl={eventLogoUrl}
         displayName={displayName}
-        avatar={avatar}
-        avatarUpdating={avatarUpdating}
-        onAvatarSelect={handleAvatarSelect}
+        draftDisplayName={draftDisplayName}
+        onDraftDisplayNameChange={(value) => {
+          setProfileError(null)
+          setDraftDisplayName(value)
+        }}
+        draftAvatar={draftAvatar}
+        onDraftAvatarSelect={setDraftAvatar}
+        profileSaving={profileSaving}
+        profileError={profileError}
+        onSaveProfile={handleSaveProfile}
+        canSave={
+          sessionStatus === "lobby" &&
+          (draftDisplayName.trim() !== displayName.trim() ||
+            (draftAvatar ?? DEFAULT_QUIZ_AVATAR) !== avatar) &&
+          draftDisplayName.trim().length > 0
+        }
       />
     </>
   )
@@ -558,31 +699,47 @@ export default function PlayPage() {
 
 function LobbyWaitingView({
   sessionTitle,
+  eventLogoUrl,
   displayName,
-  avatar,
-  avatarUpdating,
-  onAvatarSelect,
+  draftDisplayName,
+  onDraftDisplayNameChange,
+  draftAvatar,
+  onDraftAvatarSelect,
+  profileSaving,
+  profileError,
+  onSaveProfile,
+  canSave,
 }: {
   sessionTitle: string
+  eventLogoUrl: string | null
   displayName: string
-  avatar: string
-  avatarUpdating: boolean
-  onAvatarSelect: (emoji: string) => void
+  draftDisplayName: string
+  onDraftDisplayNameChange: (value: string) => void
+  draftAvatar: string | null
+  onDraftAvatarSelect: (emoji: string) => void
+  profileSaving: boolean
+  profileError: string | null
+  onSaveProfile: () => void
+  canSave: boolean
 }) {
-  const hasChosenAvatar = avatar !== DEFAULT_QUIZ_AVATAR
+  const previewAvatar = draftAvatar ?? DEFAULT_QUIZ_AVATAR
 
   return (
     <div className="min-h-screen bg-background px-3 py-6 sm:px-4 sm:py-8">
       <div className="mx-auto w-full max-w-md space-y-6">
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">{sessionTitle}</h1>
-          {displayName && (
-            <p className="text-muted-foreground text-sm">
-              Joined as{" "}
-              <span className="font-semibold text-foreground">{displayName}</span>
-            </p>
-          )}
-        </div>
+        <QuizEventBrand
+          title={sessionTitle}
+          logoUrl={eventLogoUrl}
+          subtitle={
+            displayName ? (
+              <>
+                Joined as{" "}
+                <span className="font-semibold text-foreground">{displayName}</span>
+              </>
+            ) : null
+          }
+          size="xl"
+        />
 
         <div className="rounded-xl border bg-card px-4 py-4 space-y-3 sm:px-5" role="status" aria-live="polite">
           <div className="flex items-center justify-center gap-2">
@@ -592,25 +749,63 @@ function LobbyWaitingView({
           </div>
           <p className="text-base font-medium text-center">Waiting for host to start…</p>
           <p className="text-sm text-muted-foreground text-center">
-            Pick an avatar below while you wait. When the quiz begins you&apos;ll
-            be asked to enter fullscreen mode.
+            Edit your name and avatar below, then tap Save. When the quiz begins
+            you&apos;ll be asked to enter fullscreen mode.
           </p>
         </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-foreground">Choose Your Avatar</p>
-            {hasChosenAvatar && (
-              <div className="shrink-0" aria-label={`Your avatar: ${avatar}`}>
-                <QuizAvatar emoji={avatar} size="xl" />
-              </div>
-            )}
+        <div className="space-y-4 rounded-xl border bg-card p-4">
+          <div className="space-y-2">
+            <label htmlFor="lobby-display-name" className="text-sm font-medium text-foreground">
+              Your Name
+            </label>
+            <input
+              id="lobby-display-name"
+              type="text"
+              maxLength={30}
+              value={draftDisplayName}
+              onChange={(e) => onDraftDisplayNameChange(e.target.value)}
+              disabled={profileSaving}
+              className="w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Enter your name"
+            />
           </div>
-          <QuizAvatarPicker
-            selectedAvatar={hasChosenAvatar ? avatar : null}
-            onSelect={onAvatarSelect}
-            disabled={avatarUpdating}
-          />
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-foreground">Choose Your Avatar</p>
+              <div className="shrink-0" aria-label={`Selected avatar: ${previewAvatar}`}>
+                <QuizAvatar emoji={previewAvatar} size="xl" />
+              </div>
+            </div>
+            <QuizAvatarPicker
+              selectedAvatar={draftAvatar}
+              onSelect={onDraftAvatarSelect}
+              disabled={profileSaving}
+            />
+          </div>
+
+          {profileError && (
+            <p role="alert" className="text-sm text-destructive">
+              {profileError}
+            </p>
+          )}
+
+          <Button
+            type="button"
+            className="w-full"
+            disabled={!canSave || profileSaving}
+            onClick={() => void onSaveProfile()}
+          >
+            {profileSaving ? (
+              <>
+                <Spinner size="sm" className="text-primary-foreground" />
+                Saving…
+              </>
+            ) : (
+              "Save Profile"
+            )}
+          </Button>
         </div>
       </div>
     </div>
@@ -637,6 +832,7 @@ function CountdownView() {
 function QuestionView({
   question, questionNumber, totalQuestions, questionStartedAt,
   submittedForQuestion, selectedOptionIds, setSelectedOptionIds, onSubmit, interactionLocked,
+  answeredCount, totalParticipants,
 }: {
   question: NonNullable<SessionStatePayload["currentQuestion"]>
   questionNumber: number
@@ -647,6 +843,8 @@ function QuestionView({
   setSelectedOptionIds: (ids: string[]) => void
   onSubmit: (optionIds: string[], questionId: string) => void
   interactionLocked?: boolean
+  answeredCount: number
+  totalParticipants: number
 }) {
   const [remaining, setRemaining] = useState(question.timeLimitSeconds)
   const [timedOut, setTimedOut] = useState(false)
@@ -674,6 +872,8 @@ function QuestionView({
   const pct = (remaining / question.timeLimitSeconds) * 100
   const sortedOptions = [...question.options].sort((a, b) => a.position - b.position)
   const isMultiSelect = question.questionType === "multi_select"
+  const safeTotal = Math.max(totalParticipants, answeredCount)
+  const answeredPct = safeTotal > 0 ? Math.round((answeredCount / safeTotal) * 100) : 0
 
   const handleOptionClick = (optionId: string) => {
     if (interactionLocked || submitted || timedOut) return
@@ -704,6 +904,11 @@ function QuestionView({
         )}
         <div className="flex justify-between items-center text-sm text-muted-foreground">
           <span>{Math.ceil(remaining)}s</span>
+          <span aria-live="polite">
+            <span className="font-semibold text-foreground">{answeredCount}</span>
+            {" / "}
+            {safeTotal} answered ({answeredPct}%)
+          </span>
           {timedOut && !submitted && <span className="text-destructive font-semibold" role="alert">Time&apos;s up!</span>}
         </div>
         {question.imageUrl && (
@@ -859,7 +1064,7 @@ function EndView({
 }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 space-y-8">
-      <QuizAvatar emoji={avatar || "🦉"} size="hero" className="mx-auto" />
+      <QuizAvatar emoji={avatar || DEFAULT_QUIZ_AVATAR} size="hero" className="mx-auto" />
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-black">Thanks for playing!</h1>
         {displayName && <p className="text-muted-foreground">Well done, <span className="font-semibold text-foreground">{displayName}</span>!</p>}

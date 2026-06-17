@@ -13,6 +13,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 
 import { ConfirmActionDialog } from "@/features/quiz/components/confirm-action-dialog";
+import { QuizBrandLogo } from "@/features/quiz/components/quiz-brand-logo";
 import {
   resolveGradient,
   type CustomTheme,
@@ -26,6 +27,7 @@ type Event = {
   created_at: string;
   theme_id: string | null;
   custom_theme: CustomTheme | null;
+  logo_url: string | null;
 };
 
 interface EventCardProps {
@@ -103,9 +105,12 @@ export function EventCard({ event }: EventCardProps) {
             style={{ background: gradient }}
           >
             <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/20 to-transparent" />
-            <h3 className="relative min-w-0 flex-1 line-clamp-3 text-lg font-bold leading-snug tracking-wide text-white drop-shadow-sm">
-              {event.title}
-            </h3>
+            <div className="relative flex min-w-0 flex-1 items-start gap-3">
+              <QuizBrandLogo logoUrl={event.logo_url} size="lg" framed />
+              <h3 className="min-w-0 flex-1 line-clamp-3 text-lg font-bold leading-snug tracking-wide text-white drop-shadow-sm">
+                {event.title}
+              </h3>
+            </div>
             <StatusBadge status={event.status} />
           </div>
 
