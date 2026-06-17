@@ -30,6 +30,7 @@ interface MobileNavProps {
 
 const appLinks = [
   { href: "/quiz", label: "Quiz" },
+  { href: "/smartform", label: "SmartForm" },
   { href: "/random-picker", label: "Picker" },
 ] as const;
 

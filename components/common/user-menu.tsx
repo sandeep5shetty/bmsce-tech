@@ -41,6 +41,8 @@ export function UserMenu({ user }: UserMenuProps) {
     onSuccess: () => {
       // Clear all cached queries
       queryClient.clear();
+      // Revoke SmartForm admin access so the code must be re-entered on next login
+      localStorage.removeItem("smartform_unlocked");
       // Redirect to login
       router.push("/auth/login");
     },

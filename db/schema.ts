@@ -519,6 +519,34 @@ export const quizJoinCodeHistory = pgTable("quiz_join_code_history", {
   revokedAt: timestamp("revoked_at", { mode: "date" }),
 });
 
+// SmartForm Table
+export const smartForm = pgTable("smart_forms", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  title: text("title").notNull(),
+  description: text("description"),
+  schema: jsonb("schema").notNull(),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  isActive: boolean("is_active").notNull().default(true),
+});
+
+// SmartResponse Table
+export const smartResponse = pgTable("smart_responses", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  formId: text("form_id")
+    .notNull()
+    .references(() => smartForm.id, { onDelete: "cascade" }),
+  answers: jsonb("answers").notNull(),
+  submittedBy: text("submitted_by"),
+  submittedAt: timestamp("submittedAt", { mode: "date" }).notNull().defaultNow(),
+});
+
 // Relations
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
@@ -530,6 +558,7 @@ export const userRelations = relations(user, ({ many }) => ({
   placementResponses: many(placementResponse),
   quizEvents: many(quizEvent),
   quizSessions: many(quizSession),
+  smartForms: many(smartForm),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -747,3 +776,18 @@ export const quizJoinCodeHistoryRelations = relations(
     }),
   }),
 );
+
+export const smartFormRelations = relations(smartForm, ({ one, many }) => ({
+  creator: one(user, {
+    fields: [smartForm.createdBy],
+    references: [user.id],
+  }),
+  responses: many(smartResponse),
+}));
+
+export const smartResponseRelations = relations(smartResponse, ({ one }) => ({
+  form: one(smartForm, {
+    fields: [smartResponse.formId],
+    references: [smartForm.id],
+  }),
+}));
