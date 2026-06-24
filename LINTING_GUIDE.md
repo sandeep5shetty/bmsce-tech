@@ -1,4 +1,4 @@
-# ESLint & Knip Configuration - rvyu Project
+# ESLint & Knip Configuration - bmsce.tech Project
 
 ## ✅ Configuration Complete
 

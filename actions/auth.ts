@@ -76,7 +76,7 @@ export async function signUp({
     throw new Error("Failed to sign up");
   }
 
-  auth.api.sendVerificationEmail({
+  await auth.api.sendVerificationEmail({
     body: { email, callbackURL: "/dashboard" },
     headers: await headers(),
   });

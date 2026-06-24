@@ -4,7 +4,7 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { eq } from "drizzle-orm";
 
-import { sendEmail } from "@/actions/email";
+import { buildVerificationEmailHtml, sendEmail } from "@/lib/email";
 
 import db from "@/db";
 import { user as userTable } from "@/db/schema";
@@ -29,7 +29,8 @@ export const auth = betterAuth({
       await sendEmail({
         to: user.email,
         subject: "Verify your email address",
-        text: `Click the link to verify your email: ${url}`,
+        text: `Hi${user.name ? ` ${user.name}` : ""},\n\nClick the link below to verify your email address:\n${url}`,
+        html: buildVerificationEmailHtml({ name: user.name, url }),
       });
     },
   },
