@@ -27,6 +27,9 @@ export const user = pgTable("user", {
   portfolio: text("portfolio"),
   bio: text("bio"),
   isCoordinator: boolean("is_coordinator").notNull().default(false),
+  isElectivePollAdmin: boolean("is_elective_poll_admin")
+    .notNull()
+    .default(false),
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updatedAt", { mode: "date" })
     .notNull()
@@ -219,7 +222,7 @@ export const response = pgTable(
   (t) => [unique("response_question_email_unique").on(t.questionId, t.email)],
 );
 
-// Student Table (MCA 1st yr Sec B)
+// Student Table (roster — source of truth for elective-poll audience eligibility)
 export const student = pgTable("student", {
   id: text("id")
     .primaryKey()
@@ -228,6 +231,7 @@ export const student = pgTable("student", {
   usn: text("usn").notNull().unique(),
   section: text("section").notNull(),
   email: text("email").notNull().unique(),
+  batch: text("batch").notNull(),
 });
 
 // PlacementDrive Table
@@ -544,8 +548,167 @@ export const smartResponse = pgTable("smart_responses", {
     .references(() => smartForm.id, { onDelete: "cascade" }),
   answers: jsonb("answers").notNull(),
   submittedBy: text("submitted_by"),
-  submittedAt: timestamp("submittedAt", { mode: "date" }).notNull().defaultNow(),
+  submittedAt: timestamp("submittedAt", { mode: "date" })
+    .notNull()
+    .defaultNow(),
 });
+
+// Elective Poll Table
+export const electivePoll = pgTable(
+  "elective_poll",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    creatorId: text("creator_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    status: text("status").notNull().default("draft"), // 'draft' | 'open' | 'closed'
+    audienceMode: text("audience_mode").notNull().default("all"), // 'all' | 'group' | 'custom'
+    closesAt: timestamp("closes_at", { mode: "date" }), // advisory display only, not enforced
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("elective_polls_creator_title_unique").on(
+      t.creatorId,
+      sql`lower(${t.title})`,
+    ),
+  ],
+);
+
+// Elective Poll Option Table
+export const electivePollOption = pgTable(
+  "elective_poll_option",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    pollId: text("poll_id")
+      .notNull()
+      .references(() => electivePoll.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    description: text("description"),
+    capacity: integer("capacity").notNull(),
+    seatsTaken: integer("seats_taken").notNull().default(0), // only ever mutated by the atomic reserve-seat statement
+    position: integer("position").notNull(),
+    status: text("status").notNull().default("active"), // 'active' | 'archived'
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    unique("elective_poll_options_poll_position").on(t.pollId, t.position),
+  ],
+);
+
+// Elective Poll Audience Rule Table
+export const electivePollAudienceRule = pgTable(
+  "elective_poll_audience_rule",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    pollId: text("poll_id")
+      .notNull()
+      .references(() => electivePoll.id, { onDelete: "cascade" }),
+    batch: text("batch").notNull(),
+    section: text("section"), // null = every section within that batch
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    // Group mode is single-select (one target group per poll) — a plain
+    // unique on pollId alone caps every poll at exactly one rule row.
+    uniqueIndex("elective_poll_audience_rule_poll_id_unique").on(t.pollId),
+  ],
+);
+
+// Elective Poll Audience Member Table — explicit per-student allow-list,
+// used when a poll's audienceMode is 'custom' instead of 'group'.
+export const electivePollAudienceMember = pgTable(
+  "elective_poll_audience_member",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    pollId: text("poll_id")
+      .notNull()
+      .references(() => electivePoll.id, { onDelete: "cascade" }),
+    studentId: text("student_id")
+      .notNull()
+      .references(() => student.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("elective_poll_audience_member_poll_student_unique").on(
+      t.pollId,
+      t.studentId,
+    ),
+  ],
+);
+
+// Elective Poll Audience Exclusion Table — students explicitly excluded from
+// an otherwise-matching 'group' audience (e.g. "whole batch except these 15
+// students already shortlisted elsewhere"). Only meaningful when
+// audienceMode is 'group'.
+export const electivePollAudienceExclusion = pgTable(
+  "elective_poll_audience_exclusion",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    pollId: text("poll_id")
+      .notNull()
+      .references(() => electivePoll.id, { onDelete: "cascade" }),
+    studentId: text("student_id")
+      .notNull()
+      .references(() => student.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("elective_poll_audience_exclusion_poll_student_unique").on(
+      t.pollId,
+      t.studentId,
+    ),
+  ],
+);
+
+// Elective Poll Response Table — one row per student per poll
+export const electivePollResponse = pgTable(
+  "elective_poll_response",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    pollId: text("poll_id")
+      .notNull()
+      .references(() => electivePoll.id, { onDelete: "cascade" }),
+    optionId: text("option_id")
+      .notNull()
+      .references(() => electivePollOption.id, { onDelete: "restrict" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // Snapshot of roster identity at submission time (roster rows can change later; this is the audit trail)
+    studentUsn: text("student_usn"),
+    studentName: text("student_name"),
+    studentBatch: text("student_batch"),
+    studentSection: text("student_section"),
+    submittedAt: timestamp("submitted_at", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    unique("elective_poll_response_poll_user_unique").on(t.pollId, t.userId),
+  ],
+);
 
 // Relations
 export const userRelations = relations(user, ({ many }) => ({
@@ -559,6 +722,8 @@ export const userRelations = relations(user, ({ many }) => ({
   quizEvents: many(quizEvent),
   quizSessions: many(quizSession),
   smartForms: many(smartForm),
+  electivePolls: many(electivePoll),
+  electivePollResponses: many(electivePollResponse),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -791,3 +956,85 @@ export const smartResponseRelations = relations(smartResponse, ({ one }) => ({
     references: [smartForm.id],
   }),
 }));
+
+export const electivePollRelations = relations(
+  electivePoll,
+  ({ one, many }) => ({
+    creator: one(user, {
+      fields: [electivePoll.creatorId],
+      references: [user.id],
+    }),
+    options: many(electivePollOption),
+    audienceRules: many(electivePollAudienceRule),
+    audienceMembers: many(electivePollAudienceMember),
+    audienceExclusions: many(electivePollAudienceExclusion),
+    responses: many(electivePollResponse),
+  }),
+);
+
+export const electivePollOptionRelations = relations(
+  electivePollOption,
+  ({ one, many }) => ({
+    poll: one(electivePoll, {
+      fields: [electivePollOption.pollId],
+      references: [electivePoll.id],
+    }),
+    responses: many(electivePollResponse),
+  }),
+);
+
+export const electivePollAudienceRuleRelations = relations(
+  electivePollAudienceRule,
+  ({ one }) => ({
+    poll: one(electivePoll, {
+      fields: [electivePollAudienceRule.pollId],
+      references: [electivePoll.id],
+    }),
+  }),
+);
+
+export const electivePollAudienceMemberRelations = relations(
+  electivePollAudienceMember,
+  ({ one }) => ({
+    poll: one(electivePoll, {
+      fields: [electivePollAudienceMember.pollId],
+      references: [electivePoll.id],
+    }),
+    student: one(student, {
+      fields: [electivePollAudienceMember.studentId],
+      references: [student.id],
+    }),
+  }),
+);
+
+export const electivePollAudienceExclusionRelations = relations(
+  electivePollAudienceExclusion,
+  ({ one }) => ({
+    poll: one(electivePoll, {
+      fields: [electivePollAudienceExclusion.pollId],
+      references: [electivePoll.id],
+    }),
+    student: one(student, {
+      fields: [electivePollAudienceExclusion.studentId],
+      references: [student.id],
+    }),
+  }),
+);
+
+export const electivePollResponseRelations = relations(
+  electivePollResponse,
+  ({ one }) => ({
+    poll: one(electivePoll, {
+      fields: [electivePollResponse.pollId],
+      references: [electivePoll.id],
+    }),
+    option: one(electivePollOption, {
+      fields: [electivePollResponse.optionId],
+      references: [electivePollOption.id],
+    }),
+    user: one(user, {
+      fields: [electivePollResponse.userId],
+      references: [user.id],
+    }),
+  }),
+);

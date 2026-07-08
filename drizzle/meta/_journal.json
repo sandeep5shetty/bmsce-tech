@@ -64,6 +64,27 @@
       "when": 1781474476609,
       "tag": "0008_add_smartform_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1751200000000,
+      "tag": "0010_elective_polls",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1751300000000,
+      "tag": "0011_elective_poll_audience_modes",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1751400000000,
+      "tag": "0012_elective_poll_audience_exclusions",
+      "breakpoints": true
     }
   ]
 }
