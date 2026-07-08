@@ -2,31 +2,34 @@
 
 import { useEffect, useState } from "react";
 
-import { CheckCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+
 import { useQuery } from "@tanstack/react-query";
+import { CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-import { getUser } from "@/actions/user";
+import { StudentCombobox } from "@/features/placement/components/student-combobox";
 import { submitResponse } from "@/features/polls/lib/actions";
 import { QuestionWithResponses } from "@/features/polls/lib/types";
-import { StudentCombobox } from "@/features/placement/components/student-combobox";
+
+import { getUser } from "@/actions/user";
+
 import { Student } from "@/types";
 
 export default function QuestionPage() {
   const params = useParams();
-  const id = typeof params.id === "string" ? params.id : Array.isArray(params.id) ? params.id[0] : "";
+  const id =
+    typeof params.id === "string"
+      ? params.id
+      : Array.isArray(params.id)
+        ? params.id[0]
+        : "";
 
   const { data: user, isLoading: userLoading } = useQuery({
     queryKey: ["user"],
@@ -38,7 +41,9 @@ export default function QuestionPage() {
   const [loadingQ, setLoadingQ] = useState(true);
   const [answer, setAnswer] = useState("");
   const [studentId, setStudentId] = useState("");
-  const [students, setStudents] = useState<Pick<Student, "id" | "name" | "email">[]>([]);
+  const [students, setStudents] = useState<
+    Pick<Student, "id" | "name" | "email">[]
+  >([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [alreadyAnswered, setAlreadyAnswered] = useState(false);
@@ -49,7 +54,10 @@ export default function QuestionPage() {
       .then((r) => r.json())
       .then((data) => {
         setQuestion(data);
-        if (user && data.responses?.some((r: { email: string }) => r.email === user.email)) {
+        if (
+          user &&
+          data.responses?.some((r: { email: string }) => r.email === user.email)
+        ) {
           setAlreadyAnswered(true);
         }
       })
@@ -136,7 +144,9 @@ export default function QuestionPage() {
           <CardContent className="space-y-4 pt-8 pb-8 text-center">
             <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
             <h2 className="text-xl font-semibold">
-              {alreadyAnswered && !submitted ? "Already Submitted" : "Thank You!"}
+              {alreadyAnswered && !submitted
+                ? "Already Submitted"
+                : "Thank You!"}
             </h2>
             <p className="text-muted-foreground text-sm">
               {alreadyAnswered && !submitted
@@ -181,19 +191,31 @@ export default function QuestionPage() {
               <Button
                 size="lg"
                 className="h-14 bg-green-600 text-base hover:bg-green-700"
-                disabled={submitting || (question.audience === "cr-only" && !studentId)}
+                disabled={
+                  submitting || (question.audience === "cr-only" && !studentId)
+                }
                 onClick={() => handleSubmit("Yes")}
               >
-                {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "✔ Yes"}
+                {submitting ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  "✔ Yes"
+                )}
               </Button>
               <Button
                 size="lg"
                 variant="outline"
                 className="h-14 text-base"
-                disabled={submitting || (question.audience === "cr-only" && !studentId)}
+                disabled={
+                  submitting || (question.audience === "cr-only" && !studentId)
+                }
                 onClick={() => handleSubmit("No")}
               >
-                {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "✘ No"}
+                {submitting ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  "✘ No"
+                )}
               </Button>
             </div>
           ) : (
@@ -218,7 +240,9 @@ export default function QuestionPage() {
                 }
                 onClick={() => handleSubmit()}
               >
-                {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {submitting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
                 Submit Response
               </Button>
             </div>

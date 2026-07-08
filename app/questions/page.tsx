@@ -2,81 +2,146 @@
 
 import { useEffect, useState } from "react";
 
-import {
-  Download,
-  ExternalLink,
-  Loader2,
-  Plus,
-  Radio,
-} from "lucide-react";
 import Link from "next/link";
-import { toast } from "sonner";
+
+import { ExternalLink, Loader2, Plus, Radio, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { EmptyAddCard } from "@/components/common/empty-add-card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+
+import { EmptyAddCard } from "@/components/common/empty-add-card";
 
 import { QuestionWithResponses } from "@/features/polls/lib/types";
+
+// ─── Mini answer bar shown on dashboard cards ─────────────────────────────────
+
+function MiniAnswerBar({ responses }: { responses: { answer: string }[] }) {
+  if (responses.length === 0) return null;
+  const yes = responses.filter((r) => r.answer === "Yes").length;
+  const no = responses.filter((r) => r.answer === "No").length;
+  const yesPct = Math.round((yes / responses.length) * 100);
+  const noPct = Math.round((no / responses.length) * 100);
+  return (
+    <div className="space-y-1">
+      <div className="flex h-1.5 w-full overflow-hidden rounded-full">
+        <div className="bg-green-500" style={{ width: `${yesPct}%` }} />
+        <div className="bg-red-400" style={{ width: `${noPct}%` }} />
+        <div className="bg-muted flex-1" />
+      </div>
+      <p className="text-[10px]">
+        <span className="font-medium text-green-600">{yesPct}% Yes</span>
+        {" · "}
+        <span className="font-medium text-red-500">{noPct}% No</span>
+      </p>
+    </div>
+  );
+}
+
+// ─── Relative time helper ─────────────────────────────────────────────────────
+
+function relativeTime(date: Date | string): string {
+  const diff = Date.now() - new Date(date).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// ─── Individual dashboard card ────────────────────────────────────────────────
+
+function QuestionCard({ q }: { q: QuestionWithResponses }) {
+  const lastResponse =
+    q.responses.length > 0
+      ? q.responses.reduce((a, b) =>
+          new Date(a.submittedAt) > new Date(b.submittedAt) ? a : b,
+        )
+      : null;
+
+  return (
+    <Card className="transition-shadow hover:shadow-md">
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-4">
+          <CardTitle className="text-base font-medium">{q.question}</CardTitle>
+          <div className="flex shrink-0 gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              title="Open response link"
+              onClick={() => window.open(`/q/${q.id}`, "_blank")}
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              title="Open live wall"
+              onClick={() => window.open(`/live/${q.id}`, "_blank")}
+            >
+              <Radio className="h-4 w-4 text-red-500" />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary">{q.type}</Badge>
+          <Badge variant="outline">
+            {q.audience === "all" ? "All Students" : "MCA 1st yr Sec B"}
+          </Badge>
+          {q.isAnonymous && <Badge variant="outline">Anonymous</Badge>}
+          <Separator orientation="vertical" className="h-4" />
+          <span className="text-muted-foreground text-xs">
+            {q.responses.length} response{q.responses.length !== 1 ? "s" : ""}
+          </span>
+          {lastResponse ? (
+            <span className="text-muted-foreground text-xs">
+              · last {relativeTime(lastResponse.submittedAt)}
+            </span>
+          ) : (
+            <span className="text-muted-foreground text-xs">
+              {new Date(q.createdAt).toLocaleDateString("en-IN")}
+            </span>
+          )}
+        </div>
+
+        {q.type === "yes-no" && q.responses.length > 0 && (
+          <MiniAnswerBar responses={q.responses} />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function QuestionsPage() {
   const [questions, setQuestions] = useState<QuestionWithResponses[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<QuestionWithResponses | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function loadQuestions() {
+    const res = await fetch("/api/questions");
+    if (res.ok) setQuestions(await res.json());
+  }
 
   useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch("/api/questions");
-        if (res.ok) setQuestions(await res.json());
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-
-    const interval = setInterval(async () => {
-      const res = await fetch("/api/questions");
-      if (res.ok) setQuestions(await res.json());
-    }, 10000);
-
-    return () => clearInterval(interval);
+    loadQuestions().finally(() => setLoading(false));
   }, []);
 
-  function exportCSV() {
-    if (!selected) return;
-    const headers = ["Email", "Student Name", "Answer", "Submitted At"];
-    const rows = selected.responses.map((r) => [
-      r.email,
-      r.studentName ?? "",
-      r.answer,
-      new Date(r.submittedAt).toLocaleString("en-IN"),
-    ]);
-    const csv = [headers, ...rows]
-      .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${selected.question.slice(0, 30)}-responses.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("CSV exported");
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await loadQuestions();
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   return (
@@ -88,86 +153,30 @@ export default function QuestionsPage() {
             Create questions and track responses in real-time.
           </p>
         </div>
-        <Button asChild size="sm">
-          <Link href="/questions/create">
-            <Plus className="mr-1.5 h-4 w-4" />
-            Create Question
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRefresh}
+            disabled={refreshing || loading}
+          >
+            <RefreshCw
+              className={`mr-1.5 h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </Button>
+          <Button asChild size="sm">
+            <Link href="/questions/create">
+              <Plus className="mr-1.5 h-4 w-4" />
+              Create Question
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
-        </div>
-      ) : selected ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
-              ← Back
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={exportCSV}
-              disabled={!selected.responses.length}
-            >
-              <Download className="mr-1.5 h-4 w-4" />
-              Export CSV
-            </Button>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>{selected.question}</CardTitle>
-              <div className="flex gap-2">
-                <Badge variant="secondary">{selected.type}</Badge>
-                <Badge variant="outline">{selected.audience === "all" ? "All Students" : "MCA 1st yr Sec B"}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {selected.responses.length === 0 ? (
-                <p className="text-muted-foreground py-8 text-center text-sm">
-                  No responses yet.
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Student Name</TableHead>
-                      <TableHead>Answer</TableHead>
-                      <TableHead>Submitted At</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selected.responses.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell className="font-mono text-xs">{r.email}</TableCell>
-                        <TableCell>{r.studentName ?? "—"}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              r.answer === "Yes"
-                                ? "default"
-                                : r.answer === "No"
-                                  ? "destructive"
-                                  : "secondary"
-                            }
-                          >
-                            {r.answer}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-xs">
-                          {new Date(r.submittedAt).toLocaleString("en-IN")}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
         </div>
       ) : questions.length === 0 ? (
         <EmptyAddCard
@@ -178,55 +187,7 @@ export default function QuestionsPage() {
       ) : (
         <div className="grid gap-4">
           {questions.map((q) => (
-            <Card
-              key={q.id}
-              className="cursor-pointer transition-shadow hover:shadow-md"
-              onClick={() => setSelected(q)}
-            >
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-4">
-                  <CardTitle className="text-base font-medium">
-                    {q.question}
-                  </CardTitle>
-                  <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      title="Open response link"
-                      onClick={() => window.open(`/q/${q.id}`, "_blank")}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      title="Open live wall"
-                      onClick={() => window.open(`/live/${q.id}`, "_blank")}
-                    >
-                      <Radio className="h-4 w-4 text-red-500" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">{q.type}</Badge>
-                  <Badge variant="outline">
-                    {q.audience === "all" ? "All Students" : "MCA 1st yr Sec B"}
-                  </Badge>
-                  {q.isAnonymous && <Badge variant="outline">Anonymous</Badge>}
-                  <Separator orientation="vertical" className="h-4" />
-                  <span className="text-muted-foreground text-xs">
-                    {q.responses.length} response{q.responses.length !== 1 ? "s" : ""}
-                  </span>
-                  <span className="text-muted-foreground text-xs">
-                    {new Date(q.createdAt).toLocaleDateString("en-IN")}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
+            <QuestionCard key={q.id} q={q} />
           ))}
         </div>
       )}

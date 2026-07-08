@@ -12,7 +12,9 @@
     "lint:icons": "knip --reporter json --include files",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "seed:students": "npx tsx scripts/seed-section-b-students.ts"
+    "seed:students": "npx tsx scripts/seed-section-b-students.ts",
+    "seed:roster": "npx tsx scripts/seed-student-roster.ts",
+    "test:seat-reservation": "npx tsx scripts/test-concurrent-seat-reservation.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1065.0",
