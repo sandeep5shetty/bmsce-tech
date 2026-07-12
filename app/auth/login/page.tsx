@@ -81,7 +81,7 @@ const Login = () => {
   });
 
   const handleSocialLogin = async (provider: "google" | "github") => {
-    await signInSocial(provider);
+    await signInSocial(provider, callbackUrl);
   };
 
   return (

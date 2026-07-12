@@ -1,6 +1,6 @@
 "use server";
 
-import { and, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 
 import { AGENTIC_AI_SHORTLIST_USNS } from "@/lib/electives/agentic-ai-shortlist";
 import { MCA_2025_27_BATCH } from "@/lib/students/mca-2025-27-roster";
@@ -13,14 +13,18 @@ import {
   electivePollAudienceExclusion,
   electivePollAudienceMember,
   electivePollAudienceRule,
+  electivePollCollaborator,
   electivePollOption,
+  electivePollReopenGrant,
   electivePollResponse,
   student,
+  user,
 } from "@/db/schema";
 
 import { PollApiError, requirePollAdmin } from "./auth";
 import { checkEligibility } from "./eligibility";
 import { broadcastPollEvent } from "./realtime";
+import { resolveActiveGrant } from "./reopen-grants";
 import {
   RESPONSE_UNIQUE_CONSTRAINT,
   isPgError,
@@ -41,16 +45,22 @@ import type {
   UpdatePollDetailsInput,
 } from "./validation";
 
+// Once a poll is closed, there is no blanket "reopen for everyone" path —
+// the only way back in for a student is a per-student reopen grant (see
+// reopen-grants.ts), which authorizes submission without ever touching
+// poll.status. This is deliberate: a blanket closed->open transition would
+// let every non-responder back in, defeating "reopen for selected students
+// only."
 const ALLOWED_STATUS_TRANSITIONS: Record<
   ElectivePollStatus,
   ElectivePollStatus[]
 > = {
   draft: ["open"],
   open: ["closed"],
-  closed: ["open"],
+  closed: [],
 };
 
-async function getOwnedPoll(creatorId: string, pollId: string) {
+export async function getOwnedPoll(creatorId: string, pollId: string) {
   return db.query.electivePoll.findFirst({
     where: and(
       eq(electivePoll.id, pollId),
@@ -63,6 +73,41 @@ async function getOwnedPoll(creatorId: string, pollId: string) {
       audienceExclusions: { with: { student: true } },
     },
   });
+}
+
+const POLL_WITH_RELATIONS = {
+  options: true,
+  audienceRules: true,
+  audienceMembers: { with: { student: true } },
+  audienceExclusions: { with: { student: true } },
+  creator: { columns: { name: true, email: true } },
+} as const;
+
+/**
+ * Broader access check than getOwnedPoll: returns the poll if the caller is
+ * either its creator OR an ACCEPTED collaborator (see
+ * features/elective-polls/lib/collaborators.ts). Used by every poll-managing
+ * action except deletePoll, which deliberately stays creator-only via the
+ * strict getOwnedPoll above. The `status = 'accepted'` condition on the
+ * collaborator lookup is the single load-bearing check of the whole
+ * collaborator feature — a 'pending' invite must never grant access.
+ */
+export async function getManagedPoll(userId: string, pollId: string) {
+  const poll = await db.query.electivePoll.findFirst({
+    where: eq(electivePoll.id, pollId),
+    with: POLL_WITH_RELATIONS,
+  });
+  if (!poll) return undefined;
+  if (poll.creatorId === userId) return poll;
+
+  const collaborator = await db.query.electivePollCollaborator.findFirst({
+    where: and(
+      eq(electivePollCollaborator.pollId, pollId),
+      eq(electivePollCollaborator.userId, userId),
+      eq(electivePollCollaborator.status, "accepted"),
+    ),
+  });
+  return collaborator ? poll : undefined;
 }
 
 async function broadcastFreshSeatCounts(pollId: string) {
@@ -87,38 +132,56 @@ function isInvalidStudentReference(error: unknown): boolean {
 
 export async function listMyPolls() {
   const admin = await requirePollAdmin();
+
+  const collaboratorRows = await db
+    .select({ pollId: electivePollCollaborator.pollId })
+    .from(electivePollCollaborator)
+    .where(
+      and(
+        eq(electivePollCollaborator.userId, admin.id),
+        eq(electivePollCollaborator.status, "accepted"),
+      ),
+    );
+  const collaboratorPollIds = collaboratorRows.map((r) => r.pollId);
+
   const polls = await db.query.electivePoll.findMany({
-    where: eq(electivePoll.creatorId, admin.id),
+    where: or(
+      eq(electivePoll.creatorId, admin.id),
+      collaboratorPollIds.length > 0
+        ? inArray(electivePoll.id, collaboratorPollIds)
+        : undefined,
+    ),
     orderBy: desc(electivePoll.createdAt),
-    with: {
-      options: true,
-      audienceRules: true,
-      audienceMembers: { with: { student: true } },
-      audienceExclusions: { with: { student: true } },
-    },
+    with: POLL_WITH_RELATIONS,
   });
-  return polls.map((p) =>
-    serializePoll(
+  return polls.map((p) => ({
+    ...serializePoll(
       p,
       p.options,
       p.audienceRules,
       p.audienceMembers,
       p.audienceExclusions,
     ),
-  );
+    role:
+      p.creatorId === admin.id ? ("owner" as const) : ("collaborator" as const),
+  }));
 }
 
 export async function getPoll(pollId: string) {
   const admin = await requirePollAdmin();
-  const poll = await getOwnedPoll(admin.id, pollId);
+  const poll = await getManagedPoll(admin.id, pollId);
   if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
-  return serializePoll(
-    poll,
-    poll.options,
-    poll.audienceRules,
-    poll.audienceMembers,
-    poll.audienceExclusions,
-  );
+  return {
+    ...serializePoll(
+      poll,
+      poll.options,
+      poll.audienceRules,
+      poll.audienceMembers,
+      poll.audienceExclusions,
+    ),
+    creatorName: poll.creator?.name ?? null,
+    creatorEmail: poll.creator?.email ?? null,
+  };
 }
 
 export async function createPoll(data: CreatePollInput) {
@@ -223,7 +286,7 @@ export async function updatePollDetails(
   data: UpdatePollDetailsInput,
 ) {
   const admin = await requirePollAdmin();
-  const poll = await getOwnedPoll(admin.id, pollId);
+  const poll = await getManagedPoll(admin.id, pollId);
   if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
 
   const updates: Partial<typeof electivePoll.$inferInsert> = {};
@@ -264,7 +327,7 @@ export async function updatePollDetails(
 
 export async function setPollStatus(pollId: string, status: "open" | "closed") {
   const admin = await requirePollAdmin();
-  const poll = await getOwnedPoll(admin.id, pollId);
+  const poll = await getManagedPoll(admin.id, pollId);
   if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
 
   const currentStatus = poll.status as ElectivePollStatus;
@@ -339,7 +402,7 @@ export async function deletePoll(pollId: string) {
 
 export async function addOption(pollId: string, data: CreateOptionInput) {
   const admin = await requirePollAdmin();
-  const poll = await getOwnedPoll(admin.id, pollId);
+  const poll = await getManagedPoll(admin.id, pollId);
   if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
   if (poll.status === "closed") {
     throw new PollApiError(
@@ -377,7 +440,7 @@ export async function updateOption(
   data: UpdateOptionInput,
 ) {
   const admin = await requirePollAdmin();
-  const poll = await getOwnedPoll(admin.id, pollId);
+  const poll = await getManagedPoll(admin.id, pollId);
   if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
 
   const option = poll.options.find((o) => o.id === optionId);
@@ -414,7 +477,7 @@ export async function updateOption(
 
 export async function deleteOption(pollId: string, optionId: string) {
   const admin = await requirePollAdmin();
-  const poll = await getOwnedPoll(admin.id, pollId);
+  const poll = await getManagedPoll(admin.id, pollId);
   if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
 
   const option = poll.options.find((o) => o.id === optionId);
@@ -445,7 +508,7 @@ export async function reorderOptions(
   data: ReorderOptionsInput,
 ) {
   const admin = await requirePollAdmin();
-  const poll = await getOwnedPoll(admin.id, pollId);
+  const poll = await getManagedPoll(admin.id, pollId);
   if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
 
   const validIds = new Set(poll.options.map((o) => o.id));
@@ -635,7 +698,7 @@ export async function searchRosterStudents(query: string) {
 
 export async function setAudience(pollId: string, data: SetAudienceInput) {
   const admin = await requirePollAdmin();
-  const poll = await getOwnedPoll(admin.id, pollId);
+  const poll = await getManagedPoll(admin.id, pollId);
   if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
   if (poll.status !== "draft") {
     throw new PollApiError(
@@ -698,7 +761,7 @@ export async function setAudience(pollId: string, data: SetAudienceInput) {
     .set({ audienceMode: data.audienceMode })
     .where(eq(electivePoll.id, pollId));
 
-  const updated = await getOwnedPoll(admin.id, pollId);
+  const updated = await getManagedPoll(admin.id, pollId);
   if (!updated)
     throw new PollApiError("UPDATE_FAILED", "Failed to reload poll.", 500);
   return serializePoll(
@@ -714,7 +777,7 @@ export async function setAudience(pollId: string, data: SetAudienceInput) {
 
 export async function listResponses(pollId: string) {
   const admin = await requirePollAdmin();
-  const poll = await getOwnedPoll(admin.id, pollId);
+  const poll = await getManagedPoll(admin.id, pollId);
   if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
 
   const responses = await db.query.electivePollResponse.findMany({
@@ -723,6 +786,10 @@ export async function listResponses(pollId: string) {
     with: {
       user: { columns: { email: true, name: true } },
       option: { columns: { label: true } },
+      reopenGrant: {
+        columns: { remarks: true, grantedAt: true },
+        with: { grantedByUser: { columns: { name: true, email: true } } },
+      },
     },
   });
 
@@ -731,6 +798,16 @@ export async function listResponses(pollId: string) {
     email: r.user.email,
     userName: r.user.name,
     optionLabel: r.option.label,
+    reopenGrant: r.reopenGrant
+      ? {
+          remarks: r.reopenGrant.remarks,
+          grantedAt: r.reopenGrant.grantedAt.toISOString(),
+          grantedByName:
+            r.reopenGrant.grantedByUser?.name ??
+            r.reopenGrant.grantedByUser?.email ??
+            null,
+        }
+      : null,
   }));
 }
 
@@ -741,7 +818,7 @@ export async function listResponses(pollId: string) {
  */
 export async function listNonResponders(pollId: string) {
   const admin = await requirePollAdmin();
-  const poll = await getOwnedPoll(admin.id, pollId);
+  const poll = await getManagedPoll(admin.id, pollId);
   if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
 
   let eligibleStudents: (typeof student.$inferSelect)[];
@@ -775,16 +852,45 @@ export async function listNonResponders(pollId: string) {
     responded.map((r) => r.usn).filter((usn): usn is string => !!usn),
   );
 
+  const activeGrants = await db
+    .select({
+      studentId: electivePollReopenGrant.studentId,
+      remarks: electivePollReopenGrant.remarks,
+      grantedAt: electivePollReopenGrant.grantedAt,
+      grantedByName: user.name,
+      grantedByEmail: user.email,
+    })
+    .from(electivePollReopenGrant)
+    .leftJoin(user, eq(electivePollReopenGrant.grantedBy, user.id))
+    .where(
+      and(
+        eq(electivePollReopenGrant.pollId, pollId),
+        isNull(electivePollReopenGrant.revokedAt),
+      ),
+    );
+  const grantByStudentId = new Map(activeGrants.map((g) => [g.studentId, g]));
+
   return eligibleStudents
     .filter((s) => !respondedUsns.has(s.usn))
-    .map((s) => ({
-      id: s.id,
-      name: s.name,
-      usn: s.usn,
-      email: s.email,
-      batch: s.batch,
-      section: s.section,
-    }))
+    .map((s) => {
+      const grant = grantByStudentId.get(s.id);
+      return {
+        id: s.id,
+        name: s.name,
+        usn: s.usn,
+        email: s.email,
+        batch: s.batch,
+        section: s.section,
+        grant: grant
+          ? {
+              remarks: grant.remarks,
+              grantedAt: grant.grantedAt.toISOString(),
+              grantedByName:
+                grant.grantedByName ?? grant.grantedByEmail ?? null,
+            }
+          : null,
+      };
+    })
     .sort((a, b) => a.usn.localeCompare(b.usn));
 }
 
@@ -824,11 +930,28 @@ export async function getPollPublic(pollId: string) {
     ),
   });
 
+  // canRespond is exposed separately from poll.status so the "Closed" badge
+  // shown elsewhere in the admin UI stays truthful even for a student who's
+  // been individually granted late-submission access (see reopen-grants.ts).
+  // Only resolved when relevant: an open poll is respondable outright, and a
+  // student who's already responded doesn't need this extra round trip.
+  let canRespond = poll.status === "open";
+  let viaReopenGrant = false;
+  if (poll.status === "closed" && !myResponse) {
+    const active = await resolveActiveGrant(pollId, user.email);
+    if (active.grant) {
+      canRespond = true;
+      viaReopenGrant = true;
+    }
+  }
+
   return {
     poll: serializePoll(poll, poll.options, poll.audienceRules),
     eligible: eligibility.eligible,
     ineligibleReason: eligibility.eligible ? null : eligibility.reason,
     myResponse: myResponse ? serializeResponse(myResponse) : null,
+    canRespond,
+    viaReopenGrant,
   };
 }
 
@@ -847,7 +970,24 @@ export async function submitResponse(pollId: string, optionId: string) {
     with: { audienceRules: true },
   });
   if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
-  if (poll.status !== "open") {
+
+  // A closed poll can still accept a submission from a student holding an
+  // active reopen grant (see reopen-grants.ts) — everyone else (including a
+  // still-draft poll) gets the same rejection as before.
+  let grantedStudentId: string | null = null;
+  let reopenGrantId: string | null = null;
+  if (poll.status === "closed") {
+    const active = await resolveActiveGrant(pollId, user.email);
+    if (!active.grant) {
+      throw new PollApiError(
+        "POLL_NOT_OPEN",
+        "This poll is not currently open for responses.",
+        409,
+      );
+    }
+    grantedStudentId = active.studentId;
+    reopenGrantId = active.grant.id;
+  } else if (poll.status !== "open") {
     throw new PollApiError(
       "POLL_NOT_OPEN",
       "This poll is not currently open for responses.",
@@ -888,10 +1028,12 @@ export async function submitResponse(pollId: string, optionId: string) {
       pollId,
       optionId,
       userId: user.id,
+      studentId: eligibility.student?.id ?? grantedStudentId,
       studentUsn: eligibility.student?.usn ?? null,
       studentName: eligibility.student?.name ?? user.name ?? null,
       studentBatch: eligibility.student?.batch ?? null,
       studentSection: eligibility.student?.section ?? null,
+      reopenGrantId,
     });
 
     if (!result.ok) {

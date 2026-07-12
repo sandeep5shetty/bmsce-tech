@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { isBmsceEmail } from "@/lib/bmsce-email";
+
 const batchPattern = /^[\w-]{1,50}$/;
 const sectionPattern = /^[\w-]{1,20}$/;
 
@@ -126,3 +128,55 @@ export const submitResponseSchema = z.object({
 export const rosterSearchSchema = z.object({
   q: z.string().trim().max(100).default(""),
 });
+
+const usnPattern = /^[\w-]{1,20}$/;
+
+export const createStudentSchema = z.object({
+  name: z.string().trim().min(1, "Name is required.").max(150),
+  usn: z.string().trim().toUpperCase().regex(usnPattern, "Invalid USN."),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("Invalid email address.")
+    .refine(isBmsceEmail, "Must be a valid BMSCE email address."),
+  batch: z.string().trim().regex(batchPattern, "Invalid batch."),
+  section: z.string().trim().regex(sectionPattern, "Invalid section."),
+});
+
+export type CreateStudentInput = z.infer<typeof createStudentSchema>;
+
+export const updateStudentSchema = createStudentSchema
+  .partial()
+  .refine((d) => Object.keys(d).length > 0, {
+    message: "No fields provided for update.",
+  });
+
+export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
+
+export const reopenGrantSchema = z.object({
+  studentIds: z
+    .array(z.string().min(1))
+    .min(1, "Select at least one student.")
+    .max(2000),
+  remarks: z.string().trim().min(1, "Remarks are required.").max(2000),
+});
+
+export type ReopenGrantInput = z.infer<typeof reopenGrantSchema>;
+
+export const inviteCollaboratorsSchema = z.object({
+  emails: z
+    .array(z.string().trim().email())
+    .min(1, "Select at least one admin to invite.")
+    .max(50),
+});
+
+export type InviteCollaboratorsInput = z.infer<
+  typeof inviteCollaboratorsSchema
+>;
+
+export const respondToInviteSchema = z.object({
+  response: z.enum(["accepted", "declined"]),
+});
+
+export type RespondToInviteInput = z.infer<typeof respondToInviteSchema>;

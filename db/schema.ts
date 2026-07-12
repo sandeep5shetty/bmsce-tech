@@ -1,6 +1,8 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -701,12 +703,107 @@ export const electivePollResponse = pgTable(
     studentName: text("student_name"),
     studentBatch: text("student_batch"),
     studentSection: text("student_section"),
+    // Set only when this response was submitted through a selective reopen
+    // grant (poll was closed at submission time) — lets the admin see which
+    // remark authorized a given late response. Null for every ordinary
+    // submission to an open poll. SET NULL (not cascade) so the response
+    // itself is never affected if the grant row is ever removed.
+    reopenGrantId: text("reopen_grant_id").references(
+      (): AnyPgColumn => electivePollReopenGrant.id,
+      { onDelete: "set null" },
+    ),
     submittedAt: timestamp("submitted_at", { mode: "date" })
       .notNull()
       .defaultNow(),
   },
   (t) => [
     unique("elective_poll_response_poll_user_unique").on(t.pollId, t.userId),
+  ],
+);
+
+// Elective Poll Reopen Grant Table — lets an admin selectively let specific
+// non-responders back into a *closed* poll (e.g. a handful of stragglers who
+// missed the deadline) without reopening it for the whole original audience.
+// Kept as an audit trail rather than a simple toggle: revoking sets
+// revokedAt/revokedBy instead of deleting the row, and a revoke-then-regrant
+// always inserts a fresh row, so the full history of who was granted late
+// access, when, why, and by whom is never lost.
+export const electivePollReopenGrant = pgTable(
+  "elective_poll_reopen_grant",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    pollId: text("poll_id")
+      .notNull()
+      .references(() => electivePoll.id, { onDelete: "cascade" }),
+    studentId: text("student_id")
+      .notNull()
+      .references(() => student.id, { onDelete: "cascade" }),
+    remarks: text("remarks").notNull(),
+    grantedBy: text("granted_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    grantedAt: timestamp("granted_at", { mode: "date" }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { mode: "date" }),
+    revokedBy: text("revoked_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [
+    // Only one *active* (non-revoked) grant per student per poll at a time —
+    // re-granting an already-active grant updates it in place; a
+    // revoke-then-regrant inserts a new row, preserving the old one.
+    uniqueIndex("elective_poll_reopen_grant_poll_student_active_unique")
+      .on(t.pollId, t.studentId)
+      .where(sql`${t.revokedAt} is null`),
+    index("elective_poll_reopen_grant_poll_id_idx").on(t.pollId),
+  ],
+);
+
+// Elective Poll Collaborator Table — lets a poll's creator (or, once
+// accepted, any collaborator) invite other elective-poll admins to manage
+// this specific poll. Invites are request+accept: a row starts 'pending' and
+// only grants access once flipped to 'accepted' by the invitee themselves
+// (see collaborators.ts's respondToInvite). Unlike the reopen-grant table,
+// there's no requirement to preserve accept/decline history here, so a
+// plain (not partial) unique on (pollId, userId) is enough — re-inviting a
+// declined collaborator just upserts the same row back to 'pending'.
+export const electivePollCollaborator = pgTable(
+  "elective_poll_collaborator",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()), // also used directly as the email accept-link token
+    pollId: text("poll_id")
+      .notNull()
+      .references(() => electivePoll.id, { onDelete: "cascade" }),
+    // The invitee's email (always lowercase) is the durable identity for an
+    // invite — userId is only populated once an account can be resolved,
+    // either at invite time (if one already exists) or lazily the first
+    // time the matching-email visitor opens their invite (see
+    // collaborators.ts's findInviteForViewer). This lets an admin invite
+    // someone who has never signed into the site yet (e.g. a faculty member
+    // on the allowlist with no account), which a userId-only FK could never
+    // represent.
+    inviteEmail: text("invite_email").notNull(),
+    userId: text("user_id").references(() => user.id, {
+      onDelete: "cascade",
+    }),
+    status: text("status").notNull().default("pending"), // 'pending' | 'accepted' | 'declined'
+    invitedBy: text("invited_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    invitedAt: timestamp("invited_at", { mode: "date" }).notNull().defaultNow(),
+    respondedAt: timestamp("responded_at", { mode: "date" }),
+  },
+  (t) => [
+    unique("elective_poll_collaborator_poll_invite_email_unique").on(
+      t.pollId,
+      t.inviteEmail,
+    ),
+    index("elective_poll_collaborator_poll_id_idx").on(t.pollId),
+    index("elective_poll_collaborator_user_id_idx").on(t.userId),
   ],
 );
 
@@ -969,6 +1066,8 @@ export const electivePollRelations = relations(
     audienceMembers: many(electivePollAudienceMember),
     audienceExclusions: many(electivePollAudienceExclusion),
     responses: many(electivePollResponse),
+    reopenGrants: many(electivePollReopenGrant),
+    collaborators: many(electivePollCollaborator),
   }),
 );
 
@@ -1034,6 +1133,50 @@ export const electivePollResponseRelations = relations(
     }),
     user: one(user, {
       fields: [electivePollResponse.userId],
+      references: [user.id],
+    }),
+    reopenGrant: one(electivePollReopenGrant, {
+      fields: [electivePollResponse.reopenGrantId],
+      references: [electivePollReopenGrant.id],
+    }),
+  }),
+);
+
+export const electivePollReopenGrantRelations = relations(
+  electivePollReopenGrant,
+  ({ one }) => ({
+    poll: one(electivePoll, {
+      fields: [electivePollReopenGrant.pollId],
+      references: [electivePoll.id],
+    }),
+    student: one(student, {
+      fields: [electivePollReopenGrant.studentId],
+      references: [student.id],
+    }),
+    grantedByUser: one(user, {
+      fields: [electivePollReopenGrant.grantedBy],
+      references: [user.id],
+    }),
+    revokedByUser: one(user, {
+      fields: [electivePollReopenGrant.revokedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const electivePollCollaboratorRelations = relations(
+  electivePollCollaborator,
+  ({ one }) => ({
+    poll: one(electivePoll, {
+      fields: [electivePollCollaborator.pollId],
+      references: [electivePoll.id],
+    }),
+    user: one(user, {
+      fields: [electivePollCollaborator.userId],
+      references: [user.id],
+    }),
+    invitedByUser: one(user, {
+      fields: [electivePollCollaborator.invitedBy],
       references: [user.id],
     }),
   }),

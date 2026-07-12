@@ -85,6 +85,34 @@
       "when": 1751400000000,
       "tag": "0012_elective_poll_audience_exclusions",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1751500000000,
+      "tag": "0013_elective_poll_reopen_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1751600000000,
+      "tag": "0014_elective_poll_response_reopen_grant",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1751700000000,
+      "tag": "0015_elective_poll_collaborators",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1751800000000,
+      "tag": "0016_elective_poll_collaborator_email_invites",
+      "breakpoints": true
     }
   ]
 }

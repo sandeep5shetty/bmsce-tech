@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 import { ArrowLeft, UserX, Users } from "lucide-react";
 
@@ -21,11 +21,16 @@ interface PollOption {
   label: string;
 }
 
-export default function ElectivePollResponsesPage() {
+function ElectivePollResponsesPageInner() {
   const params = useParams();
   const pollId = typeof params.pollId === "string" ? params.pollId : "";
+  const searchParams = useSearchParams();
+  const initialTab =
+    searchParams.get("tab") === "not-responded" ? "not-responded" : "responded";
 
   const [title, setTitle] = useState("Poll");
+  const [status, setStatus] =
+    useState<"draft" | "open" | "closed">("draft");
   const [options, setOptions] = useState<PollOption[]>([]);
   const [responses, setResponses] = useState<PollResponseRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +44,7 @@ export default function ElectivePollResponsesPage() {
     ])
       .then(([pollBody, responsesBody]) => {
         if (pollBody?.poll?.title) setTitle(pollBody.poll.title);
+        if (pollBody?.poll?.status) setStatus(pollBody.poll.status);
         if (pollBody?.poll?.options) setOptions(pollBody.poll.options);
         setResponses(responsesBody.responses ?? []);
       })
@@ -60,7 +66,7 @@ export default function ElectivePollResponsesPage() {
         </h1>
       </div>
 
-      <Tabs defaultValue="responded">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="responded">
             <Users className="mr-1.5 h-3.5 w-3.5" />
@@ -80,9 +86,17 @@ export default function ElectivePollResponsesPage() {
           />
         </TabsContent>
         <TabsContent value="not-responded">
-          <NonRespondersList pollId={pollId} />
+          <NonRespondersList pollId={pollId} pollStatus={status} />
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function ElectivePollResponsesPage() {
+  return (
+    <Suspense>
+      <ElectivePollResponsesPageInner />
+    </Suspense>
   );
 }

@@ -13,11 +13,14 @@ import { validateOrThrow } from "@/validation";
 
 import { getUser } from "./user";
 
-export async function signInSocial(provider: "google" | "github") {
+export async function signInSocial(
+  provider: "google" | "github",
+  callbackUrl?: string,
+) {
   const { url, redirect: shouldRedirect } = await auth.api.signInSocial({
     body: {
       provider,
-      callbackURL: "/dashboard",
+      callbackURL: callbackUrl || "/dashboard",
       errorCallbackURL: "/auth/login",
     },
   });
@@ -76,10 +79,18 @@ export async function signUp({
     throw new Error("Failed to sign up");
   }
 
-  await auth.api.sendVerificationEmail({
-    body: { email, callbackURL: "/dashboard" },
-    headers: await headers(),
-  });
+  try {
+    await auth.api.sendVerificationEmail({
+      body: { email, callbackURL: "/dashboard" },
+      headers: await headers(),
+    });
+  } catch (error) {
+    // The account was already created successfully above, and email
+    // verification isn't required to sign in — a delivery failure here
+    // (e.g. email provider misconfigured) shouldn't surface as a fatal
+    // error and strand the user with a "did my signup even work?" screen.
+    console.error("Failed to send verification email:", error);
+  }
 }
 
 export async function logout() {
