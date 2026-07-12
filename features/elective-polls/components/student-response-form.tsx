@@ -44,6 +44,12 @@ interface PublicPollPayload {
   eligible: boolean;
   ineligibleReason: "NOT_IN_ROSTER" | "AUDIENCE_MISMATCH" | null;
   myResponse: { optionId: string } | null;
+  /** True when poll.status is "open", OR the responder holds an active
+   * reopen grant on an otherwise-closed poll (see reopen-grants.ts). Gate
+   * the response UI on this, not poll.status directly, so poll.status stays
+   * truthful for display. */
+  canRespond: boolean;
+  viaReopenGrant: boolean;
 }
 
 export function StudentResponseForm({ pollId }: { pollId: string }) {
@@ -207,7 +213,8 @@ export function StudentResponseForm({ pollId }: { pollId: string }) {
     );
   }
 
-  const { poll, eligible, ineligibleReason, myResponse } = data;
+  const { poll, eligible, ineligibleReason, myResponse, canRespond, viaReopenGrant } =
+    data;
   const respondedOptionId = justSubmitted ?? myResponse?.optionId ?? null;
 
   if (respondedOptionId) {
@@ -231,7 +238,7 @@ export function StudentResponseForm({ pollId }: { pollId: string }) {
     );
   }
 
-  if (poll.status !== "open") {
+  if (!canRespond) {
     const isDraft = poll.status === "draft";
     return (
       <div className="flex min-h-screen items-center justify-center px-4 py-12">
@@ -289,12 +296,18 @@ export function StudentResponseForm({ pollId }: { pollId: string }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12">
+    <div className="mt-22 flex min-h-screen flex-col items-center px-4 py-12">
       <Card className="w-full max-w-lg shadow-lg">
         <CardHeader>
           <CardTitle className="text-xl">{poll.title}</CardTitle>
           {poll.description && (
             <p className="text-muted-foreground text-sm">{poll.description}</p>
+          )}
+          {viaReopenGrant && (
+            <p className="rounded-md bg-green-50 px-3 py-2 text-xs text-green-700 dark:bg-green-950/30 dark:text-green-400">
+              You&apos;ve been granted access to respond to this poll even
+              though it&apos;s closed for others.
+            </p>
           )}
         </CardHeader>
         <CardContent className="space-y-4">

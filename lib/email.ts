@@ -78,3 +78,32 @@ export function buildVerificationEmailHtml({
   </body>
 </html>`;
 }
+
+export function buildCollaboratorInviteEmailHtml({
+  inviterName,
+  pollTitle,
+  acceptUrl,
+}: {
+  inviterName?: string | null;
+  pollTitle: string;
+  acceptUrl: string;
+}) {
+  const inviter = inviterName?.trim() || "A fellow admin";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #111827; max-width: 560px; margin: 0 auto; padding: 24px;">
+    <p>Hi,</p>
+    <p>${inviter} has invited you to collaborate on the elective poll "${pollTitle}" on bmsce.tech. Once accepted, you'll be able to manage this poll's options, audience, and responses.</p>
+    <p style="margin: 32px 0;">
+      <a href="${acceptUrl}" style="display: inline-block; background: #111827; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 600;">
+        View invitation
+      </a>
+    </p>
+    <p style="font-size: 14px; color: #6b7280;">
+      If the button does not work, copy and paste this link into your browser:<br>
+      <a href="${acceptUrl}" style="color: #2563eb; word-break: break-all;">${acceptUrl}</a>
+    </p>
+  </body>
+</html>`;
+}

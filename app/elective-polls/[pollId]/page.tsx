@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
-import { ArrowLeft, ExternalLink, Loader2, Pencil } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft, Loader2, Pencil, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,10 @@ import {
   CapacityBadge,
   SeatBar,
 } from "@/features/elective-polls/components/capacity-badge";
+import { CollaboratorsDialog } from "@/features/elective-polls/components/collaborators-dialog";
 import { PollStatusControl } from "@/features/elective-polls/components/poll-status-control";
+
+import { getUser } from "@/actions/user";
 
 interface PollOption {
   id: string;
@@ -34,6 +38,9 @@ interface AudienceMember {
 
 interface PollDetail {
   id: string;
+  creatorId: string;
+  creatorName: string | null;
+  creatorEmail: string | null;
   title: string;
   description: string | null;
   status: "draft" | "open" | "closed";
@@ -51,6 +58,13 @@ export default function ElectivePollDetailPage() {
   const [poll, setPoll] = useState<PollDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [collaboratorsOpen, setCollaboratorsOpen] = useState(false);
+
+  const { data: currentUser } = useQuery({
+    queryKey: ["user"],
+    queryFn: getUser,
+    staleTime: 1000 * 60 * 5,
+  });
 
   const respondLink =
     typeof window !== "undefined"
@@ -133,18 +147,36 @@ export default function ElectivePollDetailPage() {
         <Button size="sm" variant="outline" onClick={copyLink}>
           Copy response link
         </Button>
-        <Button size="sm" variant="outline" asChild>
+        {/* <Button size="sm" variant="outline" asChild>
           <Link href={`/elective-polls/respond/${poll.id}`} target="_blank">
             <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
             Open response page
           </Link>
-        </Button>
+        </Button> */}
         <Button size="sm" variant="outline" asChild>
           <Link href={`/elective-polls/${poll.id}/responses`}>
             View responses
           </Link>
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setCollaboratorsOpen(true)}
+        >
+          <Users className="mr-1.5 h-3.5 w-3.5" />
+          Collaborators
+        </Button>
       </div>
+
+      <CollaboratorsDialog
+        open={collaboratorsOpen}
+        onOpenChange={setCollaboratorsOpen}
+        pollId={poll.id}
+        isCreator={!!currentUser && poll.creatorId === currentUser.id}
+        currentUserEmail={currentUser?.email ?? null}
+        creatorName={poll.creatorName}
+        creatorEmail={poll.creatorEmail}
+      />
 
       <Card>
         <CardHeader className="pb-2">

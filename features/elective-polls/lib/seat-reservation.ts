@@ -51,6 +51,7 @@ type DiagnosticRow = {
   option_status: string;
   capacity: number;
   seats_taken: number;
+  has_grant: boolean;
 };
 
 /**
@@ -68,6 +69,18 @@ type DiagnosticRow = {
  * for the same option — it re-evaluates the WHERE clause against the
  * just-committed, up-to-date row, not a stale snapshot.
  *
+ * The poll-open condition (`p.status = 'open'`) has an OR'd alternative:
+ * an active elective_poll_reopen_grant row for this student on this poll.
+ * This lets an admin selectively re-admit specific non-responders to a
+ * *closed* poll (see features/elective-polls/lib/reopen-grants.ts) without
+ * touching the no-oversell guarantee at all — neither `p` nor the grant
+ * table is the row being locked here (`o` is), so this EXISTS subquery is
+ * just another read-only authorization check feeding the same WHERE clause,
+ * exactly like `p.status = 'open'` already was. It changes whether a given
+ * attempt is *authorized*, never what gets locked or when. When
+ * `params.studentId` is null (student not resolvable in the roster), the
+ * EXISTS is always false, so behavior is unchanged from before this existed.
+ *
  * If the student already has ANY response for this poll (including one
  * racing against a *different* option right now), the INSERT hits
  * elective_poll_response_poll_user_unique and Postgres raises a hard 23505
@@ -80,10 +93,15 @@ export async function reserveSeat(params: {
   pollId: string;
   optionId: string;
   userId: string;
+  studentId: string | null;
   studentUsn: string | null;
   studentName: string | null;
   studentBatch: string | null;
   studentSection: string | null;
+  /** The reopen grant that authorized this submission, if the poll was
+   * closed at the time (see actions.ts's submitResponse). Recorded on the
+   * response row so admins can see which remark justified a late response. */
+  reopenGrantId: string | null;
 }): Promise<ReserveSeatResult> {
   const responseId = crypto.randomUUID();
 
@@ -95,16 +113,25 @@ export async function reserveSeat(params: {
       WHERE o.id = ${params.optionId}
         AND o.poll_id = ${params.pollId}
         AND p.id = o.poll_id
-        AND p.status = 'open'
+        AND (
+          p.status = 'open'
+          OR EXISTS (
+            SELECT 1 FROM elective_poll_reopen_grant g
+            WHERE g.poll_id = p.id
+              AND g.student_id = ${params.studentId}
+              AND g.revoked_at IS NULL
+          )
+        )
         AND o.status = 'active'
         AND o.seats_taken < o.capacity
       RETURNING o.id
     ),
     inserted_response AS (
       INSERT INTO elective_poll_response
-        (id, poll_id, option_id, user_id, student_usn, student_name, student_batch, student_section, submitted_at)
+        (id, poll_id, option_id, user_id, student_usn, student_name, student_batch, student_section, reopen_grant_id, submitted_at)
       SELECT ${responseId}, ${params.pollId}, uo.id, ${params.userId},
-             ${params.studentUsn}, ${params.studentName}, ${params.studentBatch}, ${params.studentSection}, now()
+             ${params.studentUsn}, ${params.studentName}, ${params.studentBatch}, ${params.studentSection},
+             ${params.reopenGrantId}, now()
       FROM updated_option uo
       RETURNING id
     )
@@ -120,16 +147,31 @@ export async function reserveSeat(params: {
 
   // The UPDATE matched 0 rows — figure out why with a plain diagnostic read.
   // This read is NOT used to gate anything and can be stale under a race;
-  // it only decides the wording of the error shown to the user.
+  // it only decides the wording of the error shown to the user. Mirrors the
+  // same "open OR has an active grant" authorization check as the UPDATE
+  // above, so a granted student who fails for a *different* reason (e.g. the
+  // option is full) doesn't get a misleading "poll not open" message.
   const diag = await db.execute<DiagnosticRow>(sql`
-    SELECT p.status AS poll_status, o.status AS option_status, o.capacity, o.seats_taken
+    SELECT
+      p.status AS poll_status,
+      o.status AS option_status,
+      o.capacity,
+      o.seats_taken,
+      EXISTS (
+        SELECT 1 FROM elective_poll_reopen_grant g
+        WHERE g.poll_id = p.id
+          AND g.student_id = ${params.studentId}
+          AND g.revoked_at IS NULL
+      ) AS has_grant
     FROM elective_poll_option o
     JOIN elective_poll p ON p.id = o.poll_id
     WHERE o.id = ${params.optionId} AND o.poll_id = ${params.pollId}
   `);
   const d = diag.rows[0];
   if (!d) return { ok: false, reason: "OPTION_NOT_FOUND" };
-  if (d.poll_status !== "open") return { ok: false, reason: "POLL_NOT_OPEN" };
+  if (d.poll_status !== "open" && !d.has_grant) {
+    return { ok: false, reason: "POLL_NOT_OPEN" };
+  }
   if (d.option_status !== "active") {
     return { ok: false, reason: "OPTION_UNAVAILABLE" };
   }

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import Link from "next/link";
+
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -88,13 +90,10 @@ export function PollStatusControl({
         </Button>
       )}
       {status === "closed" && (
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setConfirmTarget("open")}
-          disabled={pending}
-        >
-          Reopen poll
+        <Button size="sm" variant="default" asChild>
+          <Link href={`/elective-polls/${pollId}/responses?tab=not-responded`}>
+            Reopen
+          </Link>
         </Button>
       )}
 
@@ -107,7 +106,7 @@ export function PollStatusControl({
         description={
           confirmTarget === "open"
             ? "Students in the target audience will immediately be able to submit responses."
-            : "Students will no longer be able to submit new responses. You can reopen it later."
+            : "Students will no longer be able to submit new responses. You can still selectively reopen it for specific non-responders later, from the Not Responded tab."
         }
         confirmLabel={confirmTarget === "open" ? "Open poll" : "Close poll"}
         destructive={confirmTarget === "closed"}

@@ -16,7 +16,7 @@ export class PollApiError extends Error {
   }
 }
 
-function hasElectivePollAccess(
+export function hasElectivePollAccess(
   user: Pick<User, "isElectivePollAdmin" | "email"> | null | undefined,
 ): boolean {
   if (!user) return false;
