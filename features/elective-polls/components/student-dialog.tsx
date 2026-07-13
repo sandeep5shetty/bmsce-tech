@@ -19,10 +19,13 @@ import { Spinner } from "@/components/ui/spinner";
 
 import type { RosterStudentWithUsage } from "@/features/elective-polls/lib/roster-actions";
 
+import { BatchCombobox } from "./batch-combobox";
+
 interface StudentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editStudent: RosterStudentWithUsage | null;
+  existingBatches: string[];
   onSuccess: () => void;
 }
 
@@ -46,6 +49,7 @@ export function StudentDialog({
   open,
   onOpenChange,
   editStudent,
+  existingBatches,
   onSuccess,
 }: StudentDialogProps) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -158,14 +162,12 @@ export function StudentDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="student-batch">Batch</Label>
-              <Input
-                id="student-batch"
-                placeholder="e.g. 2025-27"
+              <Label>Batch</Label>
+              <BatchCombobox
                 value={form.batch}
-                onChange={(e) => updateField("batch", e.target.value)}
+                onChange={(batch) => updateField("batch", batch)}
+                batches={existingBatches}
                 disabled={saving}
-                required
               />
             </div>
             <div className="space-y-2">

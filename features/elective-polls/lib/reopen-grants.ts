@@ -5,7 +5,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import db from "@/db";
 import { electivePollReopenGrant, student } from "@/db/schema";
 
-import { getManagedPoll, listNonResponders } from "./actions";
+import { getManagedPoll, listGrantCandidates } from "./actions";
 import { PollApiError, requirePollAdmin } from "./auth";
 import { broadcastPollEvent } from "./realtime";
 
@@ -56,13 +56,17 @@ export async function resolveActiveGrant(
 }
 
 /**
- * Grants a chosen subset of a closed poll's current non-responders the
- * ability to submit, without reopening the poll for everyone. Candidates are
- * validated against the live listNonResponders() result (not trusted
- * blindly from the client) so a stale selection — e.g. someone who
- * responded in the meantime — can't be granted. A grant does NOT change
- * poll.status; see reserveSeat()'s WHERE clause for how it authorizes
- * submission instead.
+ * Grants a chosen subset of students the ability to submit to this poll even
+ * though they wouldn't otherwise be authorized to — either because the poll
+ * is closed (re-admitting a late non-responder), or because they were
+ * missed out of the poll's audience entirely (wrong batch/section, absent
+ * from a custom list, excluded), regardless of whether the poll is open or
+ * closed. Candidates are validated against the live listGrantCandidates()
+ * result (not trusted blindly from the client) so a stale selection — e.g.
+ * someone who responded in the meantime — can't be granted. A grant does NOT
+ * change poll.status or the poll's audience configuration; see
+ * reserveSeat()'s WHERE clause and actions.ts's submitResponse/getPollPublic
+ * for how it authorizes submission and eligibility instead.
  */
 export async function reopenPollForStudents(
   pollId: string,
@@ -72,23 +76,23 @@ export async function reopenPollForStudents(
   const admin = await requirePollAdmin();
   const poll = await getManagedPoll(admin.id, pollId);
   if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
-  if (poll.status !== "closed") {
+  if (poll.status === "draft") {
     throw new PollApiError(
-      "POLL_NOT_CLOSED",
-      "Selective reopen is only available for closed polls.",
+      "POLL_IS_DRAFT",
+      "This poll is still a draft — edit its audience directly instead of granting access.",
       400,
     );
   }
 
-  const nonResponders = await listNonResponders(pollId);
-  const validIds = new Set(nonResponders.map((s) => s.id));
+  const candidates = await listGrantCandidates(pollId);
+  const validIds = new Set(candidates.map((s) => s.id));
   const validStudentIds = [...new Set(studentIds)].filter((id) =>
     validIds.has(id),
   );
   if (validStudentIds.length === 0) {
     throw new PollApiError(
       "INVALID_STUDENT_SELECTION",
-      "None of the selected students are current non-responders for this poll.",
+      "None of the selected students can be granted access to this poll right now.",
       400,
     );
   }

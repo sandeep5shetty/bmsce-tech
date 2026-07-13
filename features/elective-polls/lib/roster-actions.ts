@@ -11,7 +11,11 @@ import {
 
 import { PollApiError, requirePollAdmin } from "./auth";
 import { isPgError } from "./seat-reservation";
-import type { CreateStudentInput, UpdateStudentInput } from "./validation";
+import {
+  createStudentSchema,
+  type CreateStudentInput,
+  type UpdateStudentInput,
+} from "./validation";
 
 export interface RosterStudentWithUsage {
   id: string;
@@ -110,6 +114,56 @@ export async function updateStudent(
   } catch (error) {
     rethrowDuplicate(error);
   }
+}
+
+export interface ImportStudentsResult {
+  imported: number;
+  skipped: number;
+  errors: string[];
+}
+
+/**
+ * Bulk-imports parsed spreadsheet rows one at a time (not a single batched
+ * insert) so a bad or duplicate row is skipped with a reason instead of
+ * failing the entire file — mirroring the placement CSV bulk-upload route's
+ * per-row error reporting.
+ */
+export async function importStudents(
+  rows: unknown[],
+): Promise<ImportStudentsResult> {
+  await requirePollAdmin();
+
+  let imported = 0;
+  const errors: string[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    // +2: row 1 is the spreadsheet header, so the first data row is row 2.
+    const rowNumber = i + 2;
+    const parsed = createStudentSchema.safeParse(rows[i]);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      errors.push(`Row ${rowNumber}: ${issue?.message ?? "Invalid data."}`);
+      continue;
+    }
+    try {
+      await db.insert(student).values(parsed.data);
+      imported++;
+    } catch (error) {
+      if (isPgError(error, "23505", "student_usn_unique")) {
+        errors.push(
+          `Row ${rowNumber} (${parsed.data.usn}): a student with this USN already exists.`,
+        );
+      } else if (isPgError(error, "23505", "student_email_unique")) {
+        errors.push(
+          `Row ${rowNumber} (${parsed.data.usn}): a student with this email already exists.`,
+        );
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  return { imported, skipped: rows.length - imported, errors };
 }
 
 export async function deleteStudent(studentId: string) {

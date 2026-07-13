@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle, Clock, Loader2, Lock } from "lucide-react";
+import { CheckCircle, Clock, Loader2, Lock, UserX } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -136,7 +136,17 @@ export function StudentResponseForm({ pollId }: { pollId: string }) {
       .on("broadcast", { event: "poll_status_changed" }, ({ payload }) => {
         const status = payload.status as PublicPoll["status"];
         setData((prev) =>
-          prev ? { ...prev, poll: { ...prev.poll, status } } : prev,
+          prev
+            ? {
+                ...prev,
+                poll: { ...prev.poll, status },
+                // canRespond drives the gate below, not poll.status directly
+                // — it must be recomputed here too, or a poll opened via
+                // realtime stays stuck on "no longer accepting responses"
+                // until a manual refresh re-fetches it.
+                canRespond: status === "open" || prev.viaReopenGrant,
+              }
+            : prev,
         );
       })
       .subscribe();
@@ -213,8 +223,14 @@ export function StudentResponseForm({ pollId }: { pollId: string }) {
     );
   }
 
-  const { poll, eligible, ineligibleReason, myResponse, canRespond, viaReopenGrant } =
-    data;
+  const {
+    poll,
+    eligible,
+    ineligibleReason,
+    myResponse,
+    canRespond,
+    viaReopenGrant,
+  } = data;
   const respondedOptionId = justSubmitted ?? myResponse?.optionId ?? null;
 
   if (respondedOptionId) {
@@ -229,6 +245,41 @@ export function StudentResponseForm({ pollId }: { pollId: string }) {
               You&apos;ve been allocated
               {chosen ? ` "${chosen.label}"` : " your choice"} for {poll.title}.
             </p>
+            <Button variant="outline" asChild>
+              <Link href="/">Go Home</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Eligibility is checked before poll timing so an ineligible student is
+  // told that plainly, right away — not left to assume "not open yet" means
+  // they just need to wait, when in fact they'd never be able to respond
+  // even once it opens.
+  if (!eligible) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4 py-12">
+        <Card className="w-full max-w-md">
+          <CardContent className="space-y-5 pt-8 pb-8 text-center">
+            <div>
+              <h2 className="text-xl font-semibold">{poll.title}</h2>
+              {poll.description && (
+                <p className="text-muted-foreground mt-1.5 text-sm">
+                  {poll.description}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2 border-t pt-5">
+              <UserX className="text-muted-foreground mx-auto h-9 w-9" />
+              <h3 className="font-medium">Not eligible for this poll</h3>
+              <p className="text-muted-foreground text-sm">
+                {ineligibleReason === "NOT_IN_ROSTER"
+                  ? "You're not part of the roster for this poll's audience."
+                  : "This poll isn't targeted at your batch/section."}
+              </p>
+            </div>
             <Button variant="outline" asChild>
               <Link href="/">Go Home</Link>
             </Button>
@@ -259,36 +310,16 @@ export function StudentResponseForm({ pollId }: { pollId: string }) {
                 <Lock className="text-muted-foreground mx-auto h-9 w-9" />
               )}
               <h3 className="font-medium">
-                {isDraft ? "Not open yet" : "No longer accepting responses"}
+                {isDraft
+                  ? "You're eligible — Poll not open yet"
+                  : "No longer accepting responses"}
               </h3>
               <p className="text-muted-foreground text-sm">
                 {isDraft
-                  ? "The organizer hasn't started accepting responses for this poll yet. Please check back a little later."
+                  ? "You're eligible to respond, but the organizer hasn't opened this poll yet. Check back a little later."
                   : "The organizer has closed this poll. If you think this is a mistake, reach out to them directly."}
               </p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!eligible) {
-    return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <Card className="w-full max-w-sm">
-          <CardContent className="space-y-4 pt-8 pb-8 text-center">
-            <h2 className="text-xl font-semibold">
-              Not eligible for this Poll
-            </h2>
-            <p className="text-muted-foreground text-sm">
-              {ineligibleReason === "NOT_IN_ROSTER"
-                ? "You're not part of the roster for this poll's audience."
-                : "This poll isn't targeted at your batch/section."}
-            </p>
-            <Button variant="outline" asChild>
-              <Link href="/">Go Home</Link>
-            </Button>
           </CardContent>
         </Card>
       </div>
@@ -305,8 +336,9 @@ export function StudentResponseForm({ pollId }: { pollId: string }) {
           )}
           {viaReopenGrant && (
             <p className="rounded-md bg-green-50 px-3 py-2 text-xs text-green-700 dark:bg-green-950/30 dark:text-green-400">
-              You&apos;ve been granted access to respond to this poll even
-              though it&apos;s closed for others.
+              You&apos;ve been individually granted access to respond to this
+              poll, even though it&apos;s closed for others or you weren&apos;t
+              originally part of its audience.
             </p>
           )}
         </CardHeader>

@@ -6,13 +6,21 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Loader2, Pencil, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  Copy,
+  ListPlus,
+  Loader2,
+  Pencil,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+import { AddStudentsDialog } from "@/features/elective-polls/components/add-students-dialog";
 import {
   CapacityBadge,
   SeatBar,
@@ -59,6 +67,7 @@ export default function ElectivePollDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [collaboratorsOpen, setCollaboratorsOpen] = useState(false);
+  const [addStudentsOpen, setAddStudentsOpen] = useState(false);
 
   const { data: currentUser } = useQuery({
     queryKey: ["user"],
@@ -145,6 +154,7 @@ export default function ElectivePollDetailPage() {
           }
         />
         <Button size="sm" variant="outline" onClick={copyLink}>
+          <Copy className="mr-1.5 h-3.5 w-3.5" />
           Copy response link
         </Button>
         {/* <Button size="sm" variant="outline" asChild>
@@ -166,6 +176,16 @@ export default function ElectivePollDetailPage() {
           <Users className="mr-1.5 h-3.5 w-3.5" />
           Collaborators
         </Button>
+        {poll.status !== "draft" && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setAddStudentsOpen(true)}
+          >
+            <ListPlus className="mr-1.5 h-3.5 w-3.5" />
+            Add Students
+          </Button>
+        )}
       </div>
 
       <CollaboratorsDialog
@@ -176,6 +196,12 @@ export default function ElectivePollDetailPage() {
         currentUserEmail={currentUser?.email ?? null}
         creatorName={poll.creatorName}
         creatorEmail={poll.creatorEmail}
+      />
+      <AddStudentsDialog
+        open={addStudentsOpen}
+        onOpenChange={setAddStudentsOpen}
+        pollId={poll.id}
+        onSuccess={load}
       />
 
       <Card>
