@@ -204,9 +204,15 @@ export function NonRespondersList({
                 </span>
               )}
             </CardTitle>
-            {canReopen && selected.size > 0 && (
-              <Button size="sm" onClick={() => setReopenDialogOpen(true)}>
-                Reopen for {selected.size} selected
+            {canReopen && eligibleForSelection.length > 0 && (
+              <Button
+                size="sm"
+                disabled={selected.size === 0}
+                onClick={() => setReopenDialogOpen(true)}
+              >
+                {selected.size > 0
+                  ? `Reopen for ${selected.size} selected`
+                  : "Reopen"}
               </Button>
             )}
           </div>

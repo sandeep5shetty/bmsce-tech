@@ -894,6 +894,88 @@ export async function listNonResponders(pollId: string) {
     .sort((a, b) => a.usn.localeCompare(b.usn));
 }
 
+/**
+ * Full-roster search for the "grant access" picker — deliberately NOT
+ * scoped to the poll's audience like listNonResponders() is, since its whole
+ * purpose is finding a student who was missed out of that audience entirely
+ * (wrong batch/section, absent from a custom list, excluded) so an admin can
+ * grant them access directly instead. Only excludes students who've already
+ * responded (nothing to grant them) or are still a draft poll (edit the
+ * audience directly instead — no grant needed yet).
+ */
+export async function listGrantCandidates(pollId: string) {
+  const admin = await requirePollAdmin();
+  const poll = await getManagedPoll(admin.id, pollId);
+  if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
+  if (poll.status === "draft") {
+    throw new PollApiError(
+      "POLL_IS_DRAFT",
+      "This poll is still a draft — edit its audience directly instead of granting access.",
+      400,
+    );
+  }
+
+  const allStudents = await db.query.student.findMany({
+    orderBy: student.name,
+  });
+
+  const responded = await db
+    .select({ usn: electivePollResponse.studentUsn })
+    .from(electivePollResponse)
+    .where(eq(electivePollResponse.pollId, pollId));
+  const respondedUsns = new Set(
+    responded.map((r) => r.usn).filter((usn): usn is string => !!usn),
+  );
+
+  const activeGrants = await db
+    .select({ studentId: electivePollReopenGrant.studentId })
+    .from(electivePollReopenGrant)
+    .where(
+      and(
+        eq(electivePollReopenGrant.pollId, pollId),
+        isNull(electivePollReopenGrant.revokedAt),
+      ),
+    );
+  const grantedIds = new Set(activeGrants.map((g) => g.studentId));
+
+  let audienceIds: Set<string>;
+  if (poll.audienceMode === "all") {
+    audienceIds = new Set(allStudents.map((s) => s.id));
+  } else if (poll.audienceMode === "group") {
+    const rule = poll.audienceRules[0];
+    const excludedIds = new Set(
+      poll.audienceExclusions.map((e) => e.studentId),
+    );
+    audienceIds = new Set(
+      allStudents
+        .filter(
+          (s) =>
+            rule &&
+            s.batch === rule.batch &&
+            (!rule.section || s.section === rule.section) &&
+            !excludedIds.has(s.id),
+        )
+        .map((s) => s.id),
+    );
+  } else {
+    audienceIds = new Set(poll.audienceMembers.map((m) => m.studentId));
+  }
+
+  return allStudents
+    .filter((s) => !respondedUsns.has(s.usn))
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      usn: s.usn,
+      email: s.email,
+      batch: s.batch,
+      section: s.section,
+      inAudience: audienceIds.has(s.id),
+      hasActiveGrant: grantedIds.has(s.id),
+    }))
+    .sort((a, b) => a.usn.localeCompare(b.usn));
+}
+
 // ── Public: respond page + submission ─────────────────────────────────────────
 
 export async function getPollPublic(pollId: string) {
@@ -930,25 +1012,33 @@ export async function getPollPublic(pollId: string) {
     ),
   });
 
-  // canRespond is exposed separately from poll.status so the "Closed" badge
-  // shown elsewhere in the admin UI stays truthful even for a student who's
-  // been individually granted late-submission access (see reopen-grants.ts).
-  // Only resolved when relevant: an open poll is respondable outright, and a
-  // student who's already responded doesn't need this extra round trip.
+  const ineligibleReason = eligibility.eligible ? null : eligibility.reason;
+
+  // canRespond/eligible are exposed separately from poll.status/audience so
+  // the "Closed" badge and audience shown elsewhere in the admin UI stay
+  // truthful even for a student who's been individually granted access (see
+  // reopen-grants.ts). A grant overrides both: it lets back in either a late
+  // responder to a now-closed poll, or a student missed out of the poll's
+  // audience entirely (wrong batch/section, absent from a custom list,
+  // excluded) — same mechanism, same audit trail. Only resolved when
+  // relevant: an already-eligible open poll, or an already-submitted
+  // response, never needs the extra round trip.
   let canRespond = poll.status === "open";
+  let eligible = eligibility.eligible;
   let viaReopenGrant = false;
-  if (poll.status === "closed" && !myResponse) {
+  if (!myResponse && (poll.status === "closed" || !eligible)) {
     const active = await resolveActiveGrant(pollId, user.email);
     if (active.grant) {
       canRespond = true;
+      eligible = true;
       viaReopenGrant = true;
     }
   }
 
   return {
     poll: serializePoll(poll, poll.options, poll.audienceRules),
-    eligible: eligibility.eligible,
-    ineligibleReason: eligibility.eligible ? null : eligibility.reason,
+    eligible,
+    ineligibleReason: eligible ? null : ineligibleReason,
     myResponse: myResponse ? serializeResponse(myResponse) : null,
     canRespond,
     viaReopenGrant,
@@ -971,23 +1061,7 @@ export async function submitResponse(pollId: string, optionId: string) {
   });
   if (!poll) throw new PollApiError("POLL_NOT_FOUND", "Poll not found.", 404);
 
-  // A closed poll can still accept a submission from a student holding an
-  // active reopen grant (see reopen-grants.ts) — everyone else (including a
-  // still-draft poll) gets the same rejection as before.
-  let grantedStudentId: string | null = null;
-  let reopenGrantId: string | null = null;
-  if (poll.status === "closed") {
-    const active = await resolveActiveGrant(pollId, user.email);
-    if (!active.grant) {
-      throw new PollApiError(
-        "POLL_NOT_OPEN",
-        "This poll is not currently open for responses.",
-        409,
-      );
-    }
-    grantedStudentId = active.studentId;
-    reopenGrantId = active.grant.id;
-  } else if (poll.status !== "open") {
+  if (poll.status === "draft") {
     throw new PollApiError(
       "POLL_NOT_OPEN",
       "This poll is not currently open for responses.",
@@ -1000,7 +1074,26 @@ export async function submitResponse(pollId: string, optionId: string) {
     poll.audienceRules[0] ?? null,
     user.email,
   );
-  if (!eligibility.eligible) {
+
+  // A closed poll, or a student left out of the poll's audience entirely
+  // (wrong batch/section, missing from a custom list, excluded), can still
+  // submit if they hold an active reopen grant (see reopen-grants.ts) —
+  // resolved once and reused for both checks below rather than looked up
+  // twice.
+  let grant: Awaited<ReturnType<typeof resolveActiveGrant>> | null = null;
+  if (poll.status === "closed" || !eligibility.eligible) {
+    const active = await resolveActiveGrant(pollId, user.email);
+    if (active.grant) grant = active;
+  }
+
+  if (poll.status === "closed" && !grant) {
+    throw new PollApiError(
+      "POLL_NOT_OPEN",
+      "This poll is not currently open for responses.",
+      409,
+    );
+  }
+  if (!eligibility.eligible && !grant) {
     throw new PollApiError(
       "NOT_ELIGIBLE",
       eligibility.reason === "NOT_IN_ROSTER"
@@ -1009,6 +1102,18 @@ export async function submitResponse(pollId: string, optionId: string) {
       403,
     );
   }
+
+  const grantedStudentId = grant?.studentId ?? null;
+  const reopenGrantId = grant?.grant?.id ?? null;
+  const grantedStudent =
+    !eligibility.eligible && grantedStudentId
+      ? await db.query.student.findFirst({
+          where: eq(student.id, grantedStudentId),
+        })
+      : null;
+  const responseStudent = eligibility.eligible
+    ? eligibility.student
+    : grantedStudent;
 
   const option = await db.query.electivePollOption.findFirst({
     where: and(
@@ -1028,11 +1133,11 @@ export async function submitResponse(pollId: string, optionId: string) {
       pollId,
       optionId,
       userId: user.id,
-      studentId: eligibility.student?.id ?? grantedStudentId,
-      studentUsn: eligibility.student?.usn ?? null,
-      studentName: eligibility.student?.name ?? user.name ?? null,
-      studentBatch: eligibility.student?.batch ?? null,
-      studentSection: eligibility.student?.section ?? null,
+      studentId: responseStudent?.id ?? null,
+      studentUsn: responseStudent?.usn ?? null,
+      studentName: responseStudent?.name ?? user.name ?? null,
+      studentBatch: responseStudent?.batch ?? null,
+      studentSection: responseStudent?.section ?? null,
       reopenGrantId,
     });
 

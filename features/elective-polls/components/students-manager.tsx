@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { Edit, Loader2, Plus, Search, Trash2 } from "lucide-react";
+import { Edit, Loader2, Plus, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,7 @@ import { ConfirmActionDialog } from "@/features/quiz/components/confirm-action-d
 
 import type { RosterStudentWithUsage } from "@/features/elective-polls/lib/roster-actions";
 
+import { ImportStudentsDialog } from "./import-students-dialog";
 import { StudentDialog } from "./student-dialog";
 
 export function StudentsManager() {
@@ -42,6 +43,7 @@ export function StudentsManager() {
   const [sectionFilter, setSectionFilter] = useState("all");
   const [usageFilter, setUsageFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editStudent, setEditStudent] =
     useState<RosterStudentWithUsage | null>(null);
   const [deleteTarget, setDeleteTarget] =
@@ -136,6 +138,12 @@ export function StudentsManager() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         editStudent={editStudent}
+        existingBatches={batches}
+        onSuccess={load}
+      />
+      <ImportStudentsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
         onSuccess={load}
       />
       <ConfirmActionDialog
@@ -163,11 +171,21 @@ export function StudentsManager() {
             poll audience targeting.
           </p>
         </div>
-        {students && students.length > 0 && (
-          <Button size="sm" onClick={handleAdd}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            Add Student
-          </Button>
+        {students && (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setImportOpen(true)}
+            >
+              <Upload className="mr-1.5 h-4 w-4" />
+              Import
+            </Button>
+            <Button size="sm" onClick={handleAdd}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add Student
+            </Button>
+          </div>
         )}
       </div>
 
@@ -178,8 +196,21 @@ export function StudentsManager() {
       ) : students.length === 0 ? (
         <EmptyAddCard
           title="Add Student"
-          description="Add your first student to the roster."
+          description="Add your first student to the roster, or import many at once."
           onClick={handleAdd}
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                setImportOpen(true);
+              }}
+            >
+              <Upload className="mr-1.5 h-4 w-4" />
+              Import from CSV/Excel
+            </Button>
+          }
         />
       ) : (
         <Card>

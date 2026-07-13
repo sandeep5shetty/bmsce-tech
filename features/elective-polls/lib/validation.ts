@@ -154,6 +154,15 @@ export const updateStudentSchema = createStudentSchema
 
 export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
 
+export const importStudentsSchema = z.object({
+  rows: z
+    .array(z.record(z.string(), z.unknown()))
+    .min(1, "No rows to import.")
+    .max(2000, "At most 2000 students can be imported at once."),
+});
+
+export type ImportStudentsInput = z.infer<typeof importStudentsSchema>;
+
 export const reopenGrantSchema = z.object({
   studentIds: z
     .array(z.string().min(1))
