@@ -140,26 +140,40 @@ export default function SmartFormPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold sm:text-3xl">SmartForm</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            AI-powered forms for your class. Fill forms shared by your
-            coordinator.
-          </p>
+    <div>
+      <div className="relative overflow-hidden">
+        <div className="from-primary/25 pointer-events-none absolute -top-32 -right-16 h-96 w-96 rounded-full bg-linear-to-br to-transparent blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-40 -left-20 h-80 w-80 rounded-full bg-linear-to-br from-violet-500/20 to-transparent blur-3xl" />
+
+        <div className="relative container mx-auto max-w-4xl px-4 pt-12 pb-8">
+          <span className="text-primary bg-primary/10 mb-4 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold">
+            <Sparkles className="h-3.5 w-3.5" />
+            AI-Powered
+          </span>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="font-serif text-4xl leading-[1.05] font-normal">
+                Describe a form, get it in seconds.
+              </h1>
+              <p className="text-muted-foreground mt-3 max-w-lg text-base">
+                AI-powered forms for your class. Fill forms shared by your
+                coordinator, and track everything you&apos;ve submitted.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCodeEntry((v) => !v)}
+              className="shrink-0"
+            >
+              <ShieldCheck className="size-4" />
+              Admin Access
+            </Button>
+          </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowCodeEntry((v) => !v)}
-          className="shrink-0"
-        >
-          <ShieldCheck className="size-4" />
-          Admin Access
-        </Button>
       </div>
 
+      <div className="container mx-auto max-w-4xl px-4 pb-8">
       {showCodeEntry && (
         <Card className="mb-6 max-w-sm">
           <CardHeader>
@@ -205,6 +219,7 @@ export default function SmartFormPage() {
       )}
 
       <MySubmissionsList />
+      </div>
     </div>
   );
 }
@@ -473,21 +488,34 @@ function SmartFormDashboard() {
   }
 
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold sm:text-3xl">SmartForm</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Generate AI-powered forms for your class in seconds.
-        </p>
+    <div>
+      <div className="relative overflow-hidden">
+        <div className="from-primary/25 pointer-events-none absolute -top-32 -right-16 h-96 w-96 rounded-full bg-linear-to-br to-transparent blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-40 -left-20 h-80 w-80 rounded-full bg-linear-to-br from-violet-500/20 to-transparent blur-3xl" />
+
+        <div className="relative container mx-auto max-w-4xl px-4 pt-12 pb-8">
+          <span className="text-primary bg-primary/10 mb-4 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold">
+            <Sparkles className="h-3.5 w-3.5" />
+            AI-Powered
+          </span>
+          <h1 className="font-serif text-4xl leading-[1.05] font-normal">
+            Describe a form, get it in seconds.
+          </h1>
+          <p className="text-muted-foreground mt-3 max-w-lg text-base">
+            Tell SmartForm what you need and it generates editable fields
+            instantly. Share a link, collect responses, export to Excel.
+          </p>
+        </div>
       </div>
 
-      <div className="mb-6 flex gap-2 border-b">
+      <div className="container mx-auto max-w-4xl px-4 pb-8">
+      <div className="mb-6 flex gap-6 border-b">
         {(["create", "my-forms", "my-submissions"] as const).map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`pb-3 text-sm font-medium transition-colors ${
+            className={`pb-3 text-sm font-semibold transition-colors ${
               tab === t
                 ? "border-primary text-foreground -mb-px border-b-2"
                 : "text-muted-foreground hover:text-foreground"
@@ -578,7 +606,7 @@ function SmartFormDashboard() {
                     ) : (
                       <li
                         key={field.id}
-                        className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
+                        className="hover:border-primary/40 flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm transition-colors"
                       >
                         <span className="font-medium">
                           {field.label}
@@ -704,6 +732,7 @@ function SmartFormDashboard() {
 
       {/* ── MY SUBMISSIONS TAB ────────────────────────────────────────────── */}
       {tab === "my-submissions" && <MySubmissionsList />}
+      </div>
     </div>
   );
 }
@@ -883,7 +912,13 @@ function FormCard({
           <div className="min-w-0 flex-1">
             <CardTitle className="flex flex-wrap items-center gap-2 text-base">
               {form.title}
-              <Badge variant={form.isActive ? "default" : "secondary"}>
+              <Badge
+                className={
+                  form.isActive
+                    ? "bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-400"
+                    : "bg-secondary text-secondary-foreground hover:bg-secondary"
+                }
+              >
                 {form.isActive ? "Active" : "Closed"}
               </Badge>
             </CardTitle>

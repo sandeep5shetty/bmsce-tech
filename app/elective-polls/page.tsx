@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import Link from "next/link";
 
-import { Loader2, Plus, Users } from "lucide-react";
+import { Loader2, Plus, Sparkles, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -110,32 +110,97 @@ export default function ElectivePollsPage() {
     }
   }
 
+  const stats = useMemo(() => {
+    const totalSeats = polls.reduce(
+      (sum, p) => sum + p.options.reduce((s, o) => s + o.capacity, 0),
+      0,
+    );
+    const totalTaken = polls.reduce(
+      (sum, p) => sum + p.options.reduce((s, o) => s + o.seatsTaken, 0),
+      0,
+    );
+    return {
+      pollCount: polls.length,
+      openCount: polls.filter((p) => p.status === "open").length,
+      totalTaken,
+      totalSeats,
+    };
+  }, [polls]);
+
   return (
-    <div className="container mx-auto mt-8 mb-32 max-w-6xl space-y-6 px-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-serif text-3xl font-semibold">Elective Polls</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Create seat-limited elective polls and track live allocation.
-          </p>
-        </div>
-        {!loading && !forbidden && (
-          <div className="flex items-center gap-2">
-            <Button asChild size="sm" variant="outline">
-              <Link href="/elective-polls/students">
-                <Users className="mr-1.5 h-4 w-4" />
-                Manage Students
-              </Link>
-            </Button>
-            <Button asChild size="sm">
-              <Link href="/elective-polls/new">
-                <Plus className="mr-1.5 h-4 w-4" />
-                New Poll
-              </Link>
-            </Button>
+    <div>
+      <div className="relative overflow-hidden">
+        <div className="from-primary/25 pointer-events-none absolute -top-32 -right-16 h-96 w-96 rounded-full bg-linear-to-br to-transparent blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-40 -left-20 h-80 w-80 rounded-full bg-linear-to-br from-emerald-500/20 to-transparent blur-3xl" />
+
+        <div className="relative container mx-auto max-w-6xl px-6 pt-16 pb-10">
+          <span className="text-primary bg-primary/10 mb-4 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold">
+            <Sparkles className="h-3.5 w-3.5" />
+            Seat-Limited Registration
+          </span>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="font-serif max-w-2xl text-5xl leading-[1.02] font-normal">
+                Elective Polls
+              </h1>
+              <p className="text-muted-foreground mt-4 max-w-xl text-lg">
+                Create seat-limited elective polls and track live seat
+                allocation — the moment a section fills up, it locks
+                automatically.
+              </p>
+            </div>
+            {!loading && !forbidden && (
+              <div className="flex shrink-0 items-center gap-2">
+                <Button asChild size="lg" variant="outline">
+                  <Link href="/elective-polls/students">
+                    <Users className="mr-1.5 h-4 w-4" />
+                    Manage Students
+                  </Link>
+                </Button>
+                <Button asChild size="lg">
+                  <Link href="/elective-polls/new">
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    New Poll
+                  </Link>
+                </Button>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
+
+      {!loading && !forbidden && (
+        <div className="container mx-auto mb-10 grid max-w-6xl grid-cols-2 gap-3 px-6 sm:grid-cols-4">
+          <div className="bg-card rounded-xl border p-4">
+            <div className="text-2xl font-extrabold tracking-tight">
+              {stats.pollCount}
+            </div>
+            <div className="text-muted-foreground text-xs">Polls created</div>
+          </div>
+          <div className="bg-card rounded-xl border p-4">
+            <div className="text-2xl font-extrabold tracking-tight">
+              {stats.openCount}
+            </div>
+            <div className="text-muted-foreground text-xs">Open right now</div>
+          </div>
+          <div className="bg-card rounded-xl border p-4">
+            <div className="text-2xl font-extrabold tracking-tight">
+              {stats.totalTaken} / {stats.totalSeats}
+            </div>
+            <div className="text-muted-foreground text-xs">Seats filled</div>
+          </div>
+          <div className="bg-card rounded-xl border p-4">
+            <div className="text-2xl font-extrabold tracking-tight">
+              {stats.totalSeats > 0
+                ? `${Math.round((stats.totalTaken / stats.totalSeats) * 100)}%`
+                : "—"}
+            </div>
+            <div className="text-muted-foreground text-xs">Avg fill rate</div>
+          </div>
+        </div>
+      )}
+
+      <div className="container mx-auto mb-32 max-w-6xl space-y-6 px-6">
 
       {!loading && !forbidden && invites.length > 0 && (
         <Card>
@@ -219,6 +284,7 @@ export default function ElectivePollsPage() {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

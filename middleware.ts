@@ -8,6 +8,7 @@ const PROTECTED_PREFIXES = [
   "/dashboard",
   "/quiz",
   "/smartform",
+  "/experiences",
 ];
 
 const QUIZ_PUBLIC_PREFIXES = ["/quiz/join", "/quiz/play"];
@@ -63,5 +64,6 @@ export const config = {
     "/quiz/events/:path*",
     "/quiz/sessions/:path*",
     "/smartform/:path*",
+    "/experiences/:path*",
   ],
 };

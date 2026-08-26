@@ -113,6 +113,48 @@
       "when": 1751800000000,
       "tag": "0016_elective_poll_collaborator_email_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787746513824,
+      "tag": "0017_interview_experiences",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787747378795,
+      "tag": "0018_interview_experience_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787748321174,
+      "tag": "0019_interview_questions",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787749064580,
+      "tag": "0020_drop_interview_question",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787749090974,
+      "tag": "0021_interview_experience_resources",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1787749462063,
+      "tag": "0022_interview_experience_comments",
+      "breakpoints": true
     }
   ]
 }

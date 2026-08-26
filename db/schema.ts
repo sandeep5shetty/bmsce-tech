@@ -317,6 +317,96 @@ export const placementAcademicRecord = pgTable("placement_academic_record", {
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
 });
 
+// InterviewExperience Table (seniors sharing placement/interview writeups)
+export const interviewExperience = pgTable("interview_experience", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  authorId: text("author_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  driveId: text("drive_id").references(() => placementDrive.id, {
+    onDelete: "set null",
+  }),
+  companyName: text("company_name").notNull(),
+  role: text("role").notNull(),
+  batch: text("batch").notNull(),
+  result: text("result").notNull(), // "Selected" | "Rejected" | "Waitlisted"
+  ctcLpa: real("ctc_lpa"),
+  overview: text("overview").notNull(),
+  preparationResources: text("preparation_resources"),
+  isPublished: boolean("is_published").notNull().default(true),
+  isVerified: boolean("is_verified").notNull().default(false),
+  verifiedBy: text("verified_by").references(() => user.id, {
+    onDelete: "set null",
+  }),
+  verifiedAt: timestamp("verified_at", { mode: "date" }),
+  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
+});
+
+// InterviewExperienceRound Table
+export const interviewExperienceRound = pgTable(
+  "interview_experience_round",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    experienceId: text("experience_id")
+      .notNull()
+      .references(() => interviewExperience.id, { onDelete: "cascade" }),
+    roundNumber: integer("round_number").notNull(),
+    roundType: text("round_type").notNull(), // "OA" | "Technical" | "HR" | "Managerial" | "GD" | "System Design" | "Other"
+    description: text("description").notNull(),
+    difficulty: text("difficulty"), // "Easy" | "Medium" | "Hard"
+  },
+  (t) => [
+    index("interview_experience_round_experience_idx").on(t.experienceId),
+  ],
+);
+
+// InterviewExperienceResource Table (question-bank material for one company's
+// experience — a PDF link, a YouTube link, or a plain text note)
+export const interviewExperienceResource = pgTable(
+  "interview_experience_resource",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    experienceId: text("experience_id")
+      .notNull()
+      .references(() => interviewExperience.id, { onDelete: "cascade" }),
+    type: text("type").notNull(), // "pdf" | "youtube" | "text"
+    title: text("title"),
+    content: text("content").notNull(), // URL for pdf/youtube, note body for text
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("interview_experience_resource_experience_idx").on(t.experienceId),
+  ],
+);
+
+// InterviewExperienceComment Table (ask-the-senior Q&A thread per experience)
+export const interviewExperienceComment = pgTable(
+  "interview_experience_comment",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    experienceId: text("experience_id")
+      .notNull()
+      .references(() => interviewExperience.id, { onDelete: "cascade" }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("interview_experience_comment_experience_idx").on(t.experienceId),
+  ],
+);
+
 // Quiz Event Table
 export const quizEvent = pgTable(
   "quiz_event",
@@ -821,6 +911,8 @@ export const userRelations = relations(user, ({ many }) => ({
   smartForms: many(smartForm),
   electivePolls: many(electivePoll),
   electivePollResponses: many(electivePollResponse),
+  interviewExperiences: many(interviewExperience),
+  interviewExperienceComments: many(interviewExperienceComment),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -907,6 +999,58 @@ export const placementDriveRelations = relations(
   placementDrive,
   ({ many }) => ({
     responses: many(placementResponse),
+    interviewExperiences: many(interviewExperience),
+  }),
+);
+
+export const interviewExperienceRelations = relations(
+  interviewExperience,
+  ({ one, many }) => ({
+    author: one(user, {
+      fields: [interviewExperience.authorId],
+      references: [user.id],
+    }),
+    drive: one(placementDrive, {
+      fields: [interviewExperience.driveId],
+      references: [placementDrive.id],
+    }),
+    rounds: many(interviewExperienceRound),
+    resources: many(interviewExperienceResource),
+    comments: many(interviewExperienceComment),
+  }),
+);
+
+export const interviewExperienceRoundRelations = relations(
+  interviewExperienceRound,
+  ({ one }) => ({
+    experience: one(interviewExperience, {
+      fields: [interviewExperienceRound.experienceId],
+      references: [interviewExperience.id],
+    }),
+  }),
+);
+
+export const interviewExperienceResourceRelations = relations(
+  interviewExperienceResource,
+  ({ one }) => ({
+    experience: one(interviewExperience, {
+      fields: [interviewExperienceResource.experienceId],
+      references: [interviewExperience.id],
+    }),
+  }),
+);
+
+export const interviewExperienceCommentRelations = relations(
+  interviewExperienceComment,
+  ({ one }) => ({
+    experience: one(interviewExperience, {
+      fields: [interviewExperienceComment.experienceId],
+      references: [interviewExperience.id],
+    }),
+    author: one(user, {
+      fields: [interviewExperienceComment.authorId],
+      references: [user.id],
+    }),
   }),
 );
 
