@@ -28,6 +28,23 @@ export type PlacementResponse = typeof schema.placementResponse.$inferSelect;
 export type NewPlacementResponse =
   typeof schema.placementResponse.$inferInsert;
 
+// Interview Experience Types
+export type InterviewExperience = typeof schema.interviewExperience.$inferSelect;
+export type NewInterviewExperience =
+  typeof schema.interviewExperience.$inferInsert;
+export type InterviewExperienceRound =
+  typeof schema.interviewExperienceRound.$inferSelect;
+export type NewInterviewExperienceRound =
+  typeof schema.interviewExperienceRound.$inferInsert;
+export type InterviewExperienceResource =
+  typeof schema.interviewExperienceResource.$inferSelect;
+export type NewInterviewExperienceResource =
+  typeof schema.interviewExperienceResource.$inferInsert;
+export type InterviewExperienceComment =
+  typeof schema.interviewExperienceComment.$inferSelect;
+export type NewInterviewExperienceComment =
+  typeof schema.interviewExperienceComment.$inferInsert;
+
 // Session Types
 export type Session = typeof schema.session.$inferSelect;
 export type NewSession = typeof schema.session.$inferInsert;

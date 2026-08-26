@@ -1,6 +1,13 @@
 "use client";
 
-import { Briefcase, ClipboardList, FileText, HelpCircle, Users } from "lucide-react";
+import {
+  Briefcase,
+  ClipboardList,
+  FileText,
+  HelpCircle,
+  MessagesSquare,
+  Users,
+} from "lucide-react";
 
 import { FeatureCard } from "./feature-card";
 
@@ -39,6 +46,13 @@ const features = [
       "Browse placement drives, register, and track your eligibility status.",
     href: "/placement",
     icon: Briefcase,
+  },
+  {
+    title: "Interview Experiences",
+    description:
+      "Read placement and interview writeups shared by seniors, or share your own.",
+    href: "/experiences",
+    icon: MessagesSquare,
   },
 ] as const;
 
