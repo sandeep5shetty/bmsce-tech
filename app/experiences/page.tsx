@@ -8,6 +8,8 @@ import { ExperienceBrowser } from "@/features/experiences/components/experience-
 import { ExperienceShowcase } from "@/features/experiences/components/experience-showcase";
 import { getAllExperiences, getExperienceStats } from "@/features/experiences/lib/actions";
 
+export const dynamic = "force-dynamic";
+
 export default async function ExperiencesPage() {
   const [experiences, stats] = await Promise.all([
     getAllExperiences(),
