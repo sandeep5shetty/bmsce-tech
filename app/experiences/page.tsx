@@ -2,18 +2,22 @@ import Link from "next/link";
 
 import { Sparkles } from "lucide-react";
 
+import { getUser } from "@/actions/user";
+
 import { Button } from "@/components/ui/button";
 
 import { ExperienceBrowser } from "@/features/experiences/components/experience-browser";
 import { ExperienceShowcase } from "@/features/experiences/components/experience-showcase";
 import { getAllExperiences, getExperienceStats } from "@/features/experiences/lib/actions";
+import { CoordinatorSetup } from "@/features/placement/components/coordinator-setup";
 
 export const dynamic = "force-dynamic";
 
 export default async function ExperiencesPage() {
-  const [experiences, stats] = await Promise.all([
+  const [experiences, stats, currentUser] = await Promise.all([
     getAllExperiences(),
     getExperienceStats(),
+    getUser(),
   ]);
 
   return (
@@ -34,9 +38,14 @@ export default async function ExperiencesPage() {
             Real placement writeups, round-by-round breakdowns, and a question
             bank for every company — so you walk in prepared, not guessing.
           </p>
-          <Button asChild size="lg" className="mt-6">
-            <Link href="/experiences/new">＋ Share Your Experience</Link>
-          </Button>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <Button asChild size="lg">
+              <Link href="/experiences/new">＋ Share Your Experience</Link>
+            </Button>
+            {currentUser && !currentUser.isCoordinator && (
+              <CoordinatorSetup prominent />
+            )}
+          </div>
         </div>
       </div>
 

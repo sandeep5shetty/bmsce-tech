@@ -46,7 +46,7 @@ export default async function PlacementPage() {
             Track company drives and Superset registrations.
           </p>
         </div>
-        {isCoordinator && (
+        {isCoordinator ? (
           <div className="flex gap-2">
             <Button variant="outline" asChild size="sm">
               <Link href="/placement/profiles">
@@ -58,6 +58,8 @@ export default async function PlacementPage() {
               <Link href="/placement/create">Create Drive</Link>
             </Button>
           </div>
+        ) : (
+          <CoordinatorSetup />
         )}
       </div>
 
@@ -152,7 +154,6 @@ export default async function PlacementPage() {
         </div>
       )}
 
-      {!isCoordinator && <CoordinatorSetup />}
     </div>
   );
 }

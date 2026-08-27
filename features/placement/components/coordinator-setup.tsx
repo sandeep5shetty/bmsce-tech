@@ -17,7 +17,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function CoordinatorSetup() {
+export function CoordinatorSetup({
+  prominent = false,
+}: {
+  prominent?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -50,7 +54,11 @@ export function CoordinatorSetup() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="text-muted-foreground">
+        <Button
+          variant={prominent ? "outline" : "ghost"}
+          size={prominent ? "lg" : "sm"}
+          className={prominent ? undefined : "text-muted-foreground"}
+        >
           <Shield className="mr-1.5 h-3.5 w-3.5" />
           Coordinator login
         </Button>
