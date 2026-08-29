@@ -48,9 +48,9 @@ const features = [
     icon: Briefcase,
   },
   {
-    title: "Interview Experiences",
+    title: "Placement Experiences",
     description:
-      "Read placement and interview writeups shared by seniors, or share your own.",
+      "Round-by-round placement writeups from seniors — aptitude, OA, coding and interviews.",
     href: "/experiences",
     icon: MessagesSquare,
   },

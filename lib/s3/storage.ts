@@ -34,9 +34,9 @@ function getS3Client() {
 export function isS3Configured(): boolean {
   return Boolean(
     process.env.AWS_REGION &&
-      process.env.AWS_S3_BUCKET &&
-      process.env.AWS_ACCESS_KEY_ID &&
-      process.env.AWS_SECRET_ACCESS_KEY,
+    process.env.AWS_S3_BUCKET &&
+    process.env.AWS_ACCESS_KEY_ID &&
+    process.env.AWS_SECRET_ACCESS_KEY,
   );
 }
 
@@ -144,7 +144,10 @@ export function extensionFromContentType(contentType: string): string {
   return "jpg";
 }
 
-export function buildQuizEventLogoKey(eventId: string, extension: string): string {
+export function buildQuizEventLogoKey(
+  eventId: string,
+  extension: string,
+): string {
   const ext = extension.replace(/^\./, "").toLowerCase() || "jpg";
   // Stored under profiles/quiz/ so the same IAM policy as profile avatars applies.
   return `profiles/quiz/events/${eventId}/logo.${ext}`;
@@ -162,6 +165,88 @@ export function buildQuizQuestionImageKey(
 export function buildQuizUploadKey(extension: string): string {
   const ext = extension.replace(/^\./, "").toLowerCase() || "jpg";
   return `profiles/quiz/uploads/${crypto.randomUUID()}.${ext}`;
+}
+
+const DEFAULT_MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
+/** Document types accepted for placement-experience JDs and extra resources. */
+export const DOCUMENT_CONTENT_TYPES: Record<"pdf" | "docx", string> = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
+
+/**
+ * Kept under profiles/ because the bucket's IAM policy only grants writes to
+ * the profiles/ and smartforms/ prefixes — a bare "experiences/" key is
+ * rejected with AccessDenied. Same reasoning as buildQuizEventLogoKey.
+ *
+ * Documents and logos get separate sub-prefixes so the document download route
+ * (which forces Content-Disposition) can never be pointed at a logo image.
+ */
+const EXPERIENCE_PREFIX = "profiles/experiences/";
+const EXPERIENCE_DOCUMENT_PREFIX = `${EXPERIENCE_PREFIX}documents/`;
+const EXPERIENCE_LOGO_PREFIX = `${EXPERIENCE_PREFIX}logos/`;
+
+export function buildExperienceDocumentKey(extension: string): string {
+  const ext = extension.replace(/^\./, "").toLowerCase() || "pdf";
+  return `${EXPERIENCE_DOCUMENT_PREFIX}${crypto.randomUUID()}.${ext}`;
+}
+
+export function isExperienceDocumentKey(key: string): boolean {
+  return key.startsWith(EXPERIENCE_DOCUMENT_PREFIX);
+}
+
+export function buildExperienceLogoKey(extension: string): string {
+  const ext = extension.replace(/^\./, "").toLowerCase() || "png";
+  return `${EXPERIENCE_LOGO_PREFIX}${crypto.randomUUID()}.${ext}`;
+}
+
+/** True for any object this feature owns — used for cleanup on delete. */
+export function isExperienceUploadKey(key: string): boolean {
+  return key.startsWith(EXPERIENCE_PREFIX);
+}
+
+/** Resolves a stored URL to a key this feature owns, or null. */
+export function experienceUploadKeyFromUrl(url: string): string | null {
+  const key = extractS3KeyFromUrl(url);
+  return key && isExperienceUploadKey(key) ? key : null;
+}
+
+/**
+ * Resolves a stored document URL to the key we are willing to stream back.
+ * Returns null for anything outside our own document prefix, so the download
+ * route can never be pointed at an arbitrary object or host.
+ */
+export function experienceDocumentKeyFromUrl(url: string): string | null {
+  const key = extractS3KeyFromUrl(url);
+  return key && isExperienceDocumentKey(key) ? key : null;
+}
+
+export async function uploadDocumentBuffer(params: {
+  key: string;
+  body: Buffer;
+  contentType: string;
+  maxBytes?: number;
+}): Promise<string> {
+  const maxBytes = params.maxBytes ?? DEFAULT_MAX_DOCUMENT_BYTES;
+  if (params.body.byteLength > maxBytes) {
+    throw new Error("Document exceeds size limit");
+  }
+
+  const { bucket } = getS3Config();
+  const client = getS3Client();
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: params.key,
+      Body: params.body,
+      ContentType: params.contentType,
+      CacheControl: "public, max-age=86400, stale-while-revalidate=604800",
+    }),
+  );
+
+  return buildS3PublicUrl(params.key);
 }
 
 export async function uploadImageBuffer(params: {

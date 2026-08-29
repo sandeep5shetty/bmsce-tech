@@ -1,0 +1,1 @@
+ALTER TABLE "interview_experience_round" ADD COLUMN "outcome" text;

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import {
   BadgeCheck,
+  Briefcase,
   IndianRupee,
   Layers,
   MessageSquare,
@@ -11,13 +12,15 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
-import { companyGradient, companyInitial } from "../lib/company-color";
 import { ExperienceListItem } from "../lib/types";
+import { CompanyAvatar } from "./company-avatar";
+import { RoundClearedSummary, RoundProgressRail } from "./round-outcome";
 
 const barColor: Record<string, string> = {
   Selected: "from-emerald-500 to-emerald-500/40",
   Rejected: "from-red-500 to-red-500/40",
   Waitlisted: "from-amber-500 to-amber-500/40",
+  "In Process": "from-sky-500 to-sky-500/40",
 };
 
 const resultColor: Record<string, string> = {
@@ -26,6 +29,8 @@ const resultColor: Record<string, string> = {
   Rejected: "bg-red-500/15 text-red-700 dark:text-red-400 hover:bg-red-500/15",
   Waitlisted:
     "bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/15",
+  "In Process":
+    "bg-sky-500/15 text-sky-700 dark:text-sky-400 hover:bg-sky-500/15",
 };
 
 export function ExperienceCard({
@@ -33,9 +38,14 @@ export function ExperienceCard({
 }: {
   experience: ExperienceListItem;
 }) {
+  // Legacy experiences have no recorded outcomes — showing "0 of 4 cleared"
+  // for them would be a lie, so the summary only appears once at least one
+  // round has a verdict.
+  const hasOutcomes = experience.roundOutcomes.some((o) => o !== null);
+
   return (
     <Link href={`/experiences/${experience.id}`} className="group block h-full">
-      <div className="bg-card relative flex h-full flex-col overflow-hidden rounded-xl border p-5 transition-all duration-300 group-hover:-translate-y-1 group-hover:border-primary/30 group-hover:shadow-lg">
+      <div className="bg-card group-hover:border-primary/30 relative flex h-full flex-col overflow-hidden rounded-xl border p-5 transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-lg">
         <div
           className={`absolute inset-x-0 top-0 h-1 bg-linear-to-r ${
             barColor[experience.result] ?? "from-muted to-muted"
@@ -43,36 +53,61 @@ export function ExperienceCard({
         />
 
         <div className="flex items-start justify-between gap-3 pt-1">
-          <div className="flex items-start gap-3">
-            <div
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br text-base font-extrabold text-white ${companyGradient(
-                experience.companyName,
-              )}`}
-            >
-              {companyInitial(experience.companyName)}
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-base font-bold">
-                  {experience.companyName}
-                </span>
-                {experience.isVerified && (
-                  <BadgeCheck className="h-4 w-4 shrink-0 text-primary" />
-                )}
-              </div>
-              <p className="text-muted-foreground text-sm">{experience.role}</p>
+          <div className="flex min-w-0 items-start gap-3">
+            <CompanyAvatar
+              companyName={experience.companyName}
+              logoUrl={experience.companyLogoUrl}
+              size="h-11 w-11 rounded-xl text-base"
+            />
+            <div className="min-w-0">
+              <span className="block truncate text-base font-bold">
+                {experience.companyName}
+              </span>
+              <p className="text-muted-foreground truncate text-sm">
+                {experience.role}
+              </p>
             </div>
           </div>
-          <Badge className={`shrink-0 ${resultColor[experience.result] ?? ""}`}>
-            {experience.result}
-          </Badge>
+          {/* Verified above the result badge, in green — the old bare check
+              icon next to the company name was too easy to miss. */}
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            {experience.isVerified && (
+              <Badge className="gap-1 bg-emerald-600 text-white hover:bg-emerald-600">
+                <BadgeCheck className="h-3.5 w-3.5" />
+                Verified
+              </Badge>
+            )}
+            <Badge className={resultColor[experience.result] ?? ""}>
+              {experience.result}
+            </Badge>
+          </div>
         </div>
+
+        {hasOutcomes && (
+          <RoundProgressRail
+            outcomes={experience.roundOutcomes}
+            className="mt-4"
+          />
+        )}
 
         <div className="text-muted-foreground mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-dashed pt-3 text-xs">
           <span className="flex items-center gap-1">
             <Layers className="h-3.5 w-3.5" />
-            {experience.roundCount} round{experience.roundCount !== 1 ? "s" : ""}
+            {experience.roundCount} round
+            {experience.roundCount !== 1 ? "s" : ""}
           </span>
+          {hasOutcomes && (
+            <RoundClearedSummary
+              clearedCount={experience.clearedRoundCount}
+              totalCount={experience.roundCount}
+            />
+          )}
+          {experience.jdUrl && (
+            <span className="flex items-center gap-1">
+              <Briefcase className="h-3.5 w-3.5" />
+              JD
+            </span>
+          )}
           {experience.resourceCount > 0 && (
             <span className="flex items-center gap-1">
               <Paperclip className="h-3.5 w-3.5" />

@@ -1,9 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { FileText, Plus, Trash2, Youtube } from "lucide-react";
+import { useRouter } from "next/navigation";
+
+import { Briefcase, Paperclip, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -29,54 +30,99 @@ import { createExperience } from "../lib/actions";
 import {
   ExperienceRoundInput,
   ResourceInput,
+  RoundOutcome,
+  UploadedDocumentInput,
   createExperienceSchema,
   difficultyOptions,
-  resourceTypeOptions,
   resultOptions,
+  roundOutcomeOptions,
+  roundTypeLabel,
   roundTypeOptions,
 } from "../lib/validation";
+import { BatchCombobox } from "./batch-combobox";
+import { DocumentUpload, UploadedDocument } from "./document-upload";
+import { LogoUpload } from "./logo-upload";
+import { roundOutcomeMeta } from "./round-outcome";
 
 function emptyRound(roundNumber: number): ExperienceRoundInput {
   return {
     roundNumber,
-    roundType: "Technical",
+    // A drive almost always opens with a screening test, so round 1 defaults to
+    // Aptitude and everything after it to a technical interview.
+    roundType: roundNumber === 1 ? "Aptitude" : "Technical",
     description: "",
     difficulty: undefined,
+    outcome: "Cleared",
   };
 }
 
-function emptyResource(): ResourceInput {
-  return { type: "text", title: "", content: "" };
+/**
+ * A resource row while it is being filled in: the name is typed first and the
+ * file arrives from the upload route, so both halves are optional until submit.
+ */
+type ResourceDraft = {
+  title: string;
+  document: UploadedDocument | null;
+};
+
+function emptyResourceDraft(): ResourceDraft {
+  return { title: "", document: null };
 }
 
-const resourceTypeLabel: Record<(typeof resourceTypeOptions)[number], string> = {
-  pdf: "PDF Link",
-  youtube: "YouTube Link",
-  text: "Text Note",
-};
-
-const resourceTypeIcon: Record<
-  (typeof resourceTypeOptions)[number],
-  typeof FileText
-> = {
-  pdf: FileText,
-  youtube: Youtube,
-  text: FileText,
-};
+/**
+ * Segmented cleared/not-cleared/awaiting picker. Deliberately not a dropdown —
+ * this flag is the thing readers scan for, so it stays visible while writing.
+ */
+function RoundOutcomePicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: RoundOutcome | undefined;
+  onChange: (outcome: RoundOutcome) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {roundOutcomeOptions.map((option) => {
+        const meta = roundOutcomeMeta[option];
+        const isActive = value === option;
+        return (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onChange(option)}
+            disabled={disabled}
+            className={`rounded-full border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${
+              isActive
+                ? `${meta.badge} border-transparent`
+                : "text-muted-foreground hover:text-foreground hover:border-primary/40"
+            }`}
+          >
+            {meta.shortLabel}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function ExperienceForm() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [companyName, setCompanyName] = useState("");
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
   const [role, setRole] = useState("");
   const [batch, setBatch] = useState("");
-  const [result, setResult] = useState<(typeof resultOptions)[number]>("Selected");
+  const [result, setResult] =
+    useState<(typeof resultOptions)[number]>("Selected");
   const [ctcLpa, setCtcLpa] = useState("");
   const [overview, setOverview] = useState("");
   const [preparationResources, setPreparationResources] = useState("");
+  const [jd, setJd] = useState<UploadedDocument | null>(null);
   const [rounds, setRounds] = useState<ExperienceRoundInput[]>([emptyRound(1)]);
-  const [resources, setResources] = useState<ResourceInput[]>([]);
+  const [resources, setResources] = useState<ResourceDraft[]>([]);
 
   function updateRound(index: number, patch: Partial<ExperienceRoundInput>) {
     setRounds((prev) =>
@@ -97,10 +143,10 @@ export function ExperienceForm() {
   }
 
   function addResource() {
-    setResources((prev) => [...prev, emptyResource()]);
+    setResources((prev) => [...prev, emptyResourceDraft()]);
   }
 
-  function updateResource(index: number, patch: Partial<ResourceInput>) {
+  function updateResource(index: number, patch: Partial<ResourceDraft>) {
     setResources((prev) =>
       prev.map((r, i) => (i === index ? { ...r, ...patch } : r)),
     );
@@ -113,18 +159,38 @@ export function ExperienceForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const sanitizedResources = resources.filter((r) => r.content.trim());
+    // A row with neither a name nor a file is just an empty slot the author
+    // added and never filled — drop it silently. A half-filled row is a
+    // mistake worth reporting.
+    const usedResources = resources.filter((r) => r.title.trim() || r.document);
+    const incomplete = usedResources.find((r) => !r.document);
+    if (incomplete) {
+      toast.error(
+        `Upload a PDF or DOCX for "${incomplete.title.trim() || "the new resource"}"`,
+      );
+      return;
+    }
+
+    const resourceInputs: ResourceInput[] = usedResources.map((r) => ({
+      title: r.title.trim(),
+      url: r.document!.url,
+      type: r.document!.type,
+      fileName: r.document!.fileName,
+      fileSize: r.document!.fileSize,
+    }));
 
     const parsed = createExperienceSchema.safeParse({
       companyName,
+      companyLogoUrl: companyLogoUrl ?? undefined,
       role,
-      batch,
+      batch: batch.trim(),
       result,
       ctcLpa: ctcLpa ? Number(ctcLpa) : undefined,
       overview,
       preparationResources: preparationResources || undefined,
+      jd: jd ? (jd satisfies UploadedDocumentInput) : undefined,
       rounds,
-      resources: sanitizedResources,
+      resources: resourceInputs,
     });
 
     if (!parsed.success) {
@@ -153,55 +219,69 @@ export function ExperienceForm() {
   return (
     <Card className="mx-auto w-full max-w-2xl">
       <CardHeader>
-        <CardTitle>Share Your Interview Experience</CardTitle>
+        <CardTitle>Share Your Placement Experience</CardTitle>
         <CardDescription>
-          Help juniors prepare — company, rounds, and how you got ready.
+          Help juniors prepare — the whole process, from the aptitude test and
+          OA to the final interview.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-start gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="companyName">Company</Label>
-              <Input
-                id="companyName"
-                placeholder="e.g. Google"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
+              <Label>
+                Logo{" "}
+                <span className="text-muted-foreground font-normal">
+                  (optional)
+                </span>
+              </Label>
+              <LogoUpload
+                value={companyLogoUrl}
+                onChange={setCompanyLogoUrl}
                 disabled={isSubmitting}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="role">Role</Label>
-              <Input
-                id="role"
-                placeholder="e.g. SDE Intern"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                disabled={isSubmitting}
-              />
+            <div className="grid min-w-0 flex-1 grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="companyName">Company</Label>
+                <Input
+                  id="companyName"
+                  placeholder="e.g. Google"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="role">Role</Label>
+                <Input
+                  id="role"
+                  placeholder="e.g. SDE Intern"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  disabled={isSubmitting}
+                />
+              </div>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="batch">Batch</Label>
-              <Input
-                id="batch"
-                placeholder="e.g. 2024-26"
+              <Label>Batch</Label>
+              <BatchCombobox
                 value={batch}
-                onChange={(e) => setBatch(e.target.value)}
+                onChange={setBatch}
                 disabled={isSubmitting}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Result</Label>
+              <Label>Final Result</Label>
               <Select
                 value={result}
                 onValueChange={(v) => setResult(v as typeof result)}
                 disabled={isSubmitting}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -215,7 +295,10 @@ export function ExperienceForm() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ctcLpa">
-                CTC (LPA) <span className="text-muted-foreground font-normal">(optional)</span>
+                CTC (LPA){" "}
+                <span className="text-muted-foreground font-normal">
+                  (optional)
+                </span>
               </Label>
               <Input
                 id="ctcLpa"
@@ -245,7 +328,9 @@ export function ExperienceForm() {
           <div className="space-y-1.5">
             <Label htmlFor="preparationResources">
               Preparation Resources{" "}
-              <span className="text-muted-foreground font-normal">(optional)</span>
+              <span className="text-muted-foreground font-normal">
+                (optional)
+              </span>
             </Label>
             <Textarea
               id="preparationResources"
@@ -257,11 +342,37 @@ export function ExperienceForm() {
             />
           </div>
 
+          <div className="space-y-3 rounded-lg border p-4">
+            <div className="flex items-start gap-2">
+              <Briefcase className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                  Job Description (JD){" "}
+                  <span className="normal-case">(optional)</span>
+                </p>
+                <p className="text-muted-foreground mt-0.5 text-xs">
+                  Upload the JD the company shared, as a PDF or DOCX.
+                </p>
+              </div>
+            </div>
+            <DocumentUpload
+              value={jd}
+              onChange={setJd}
+              disabled={isSubmitting}
+            />
+          </div>
+
           <div className="space-y-4 rounded-lg border p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
-                Rounds
-              </p>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                  Rounds &amp; Stages
+                </p>
+                <p className="text-muted-foreground mt-0.5 text-xs">
+                  Add every stage you attended — aptitude, OA, coding, GD,
+                  interviews — and mark whether you cleared it.
+                </p>
+              </div>
               <Button
                 type="button"
                 variant="outline"
@@ -274,104 +385,123 @@ export function ExperienceForm() {
               </Button>
             </div>
 
-            {rounds.map((round, index) => (
-              <div key={index} className="space-y-3 rounded-lg border p-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">Round {round.roundNumber}</p>
-                  {rounds.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeRound(index)}
-                      disabled={isSubmitting}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
+            {rounds.map((round, index) => {
+              return (
+                <div key={index} className="space-y-3 rounded-lg border p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">
+                      Round {round.roundNumber}
+                    </p>
+                    {rounds.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeRound(index)}
+                        disabled={isSubmitting}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Stage</Label>
+                      <Select
+                        value={round.roundType}
+                        onValueChange={(v) =>
+                          updateRound(index, {
+                            roundType: v as ExperienceRoundInput["roundType"],
+                          })
+                        }
+                        disabled={isSubmitting}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {roundTypeOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {roundTypeLabel[option]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>
+                        Difficulty{" "}
+                        <span className="text-muted-foreground font-normal">
+                          (optional)
+                        </span>
+                      </Label>
+                      <Select
+                        value={round.difficulty ?? "unset"}
+                        onValueChange={(v) =>
+                          updateRound(index, {
+                            difficulty:
+                              v === "unset"
+                                ? undefined
+                                : (v as ExperienceRoundInput["difficulty"]),
+                          })
+                        }
+                        disabled={isSubmitting}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unset">Not set</SelectItem>
+                          {difficultyOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
                   <div className="space-y-1.5">
-                    <Label>Type</Label>
-                    <Select
-                      value={round.roundType}
-                      onValueChange={(v) =>
-                        updateRound(index, {
-                          roundType: v as ExperienceRoundInput["roundType"],
-                        })
+                    <Label>Questions asked / what happened</Label>
+                    <Textarea
+                      placeholder="Describe the questions asked and format of this round..."
+                      rows={3}
+                      value={round.description}
+                      onChange={(e) =>
+                        updateRound(index, { description: e.target.value })
                       }
                       disabled={isSubmitting}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roundTypeOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>
-                      Difficulty{" "}
-                      <span className="text-muted-foreground font-normal">(optional)</span>
-                    </Label>
-                    <Select
-                      value={round.difficulty ?? "unset"}
-                      onValueChange={(v) =>
-                        updateRound(index, {
-                          difficulty:
-                            v === "unset"
-                              ? undefined
-                              : (v as ExperienceRoundInput["difficulty"]),
-                        })
-                      }
-                      disabled={isSubmitting}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unset">Not set</SelectItem>
-                        {difficultyOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
 
-                <div className="space-y-1.5">
-                  <Label>Questions asked / what happened</Label>
-                  <Textarea
-                    placeholder="Describe the questions asked and format of this round..."
-                    rows={3}
-                    value={round.description}
-                    onChange={(e) =>
-                      updateRound(index, { description: e.target.value })
-                    }
-                    disabled={isSubmitting}
-                  />
+                  <div className="space-y-1.5 border-t border-dashed pt-3">
+                    <Label>Did you clear this round?</Label>
+                    <RoundOutcomePicker
+                      value={round.outcome}
+                      onChange={(outcome) => updateRound(index, { outcome })}
+                      disabled={isSubmitting}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="space-y-4 rounded-lg border p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
-                  Question Bank
-                </p>
-                <p className="text-muted-foreground mt-0.5 text-xs">
-                  Attach a PDF link, a YouTube link, or a text note for this company.
-                </p>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <Paperclip className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                    Extra Resources
+                  </p>
+                  <p className="text-muted-foreground mt-0.5 text-xs">
+                    Notes, previous papers, prep sheets — upload each as a PDF
+                    or DOCX and give it a name.
+                  </p>
+                </div>
               </div>
               <Button
                 type="button"
@@ -385,81 +515,44 @@ export function ExperienceForm() {
               </Button>
             </div>
 
-            {resources.map((resource, index) => {
-              const Icon = resourceTypeIcon[resource.type];
-              return (
-                <div key={index} className="space-y-2 rounded-lg border p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Icon className="text-muted-foreground h-4 w-4" />
-                      <Select
-                        value={resource.type}
-                        onValueChange={(v) =>
-                          updateResource(index, {
-                            type: v as ResourceInput["type"],
-                          })
-                        }
-                        disabled={isSubmitting}
-                      >
-                        <SelectTrigger className="w-[160px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {resourceTypeOptions.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {resourceTypeLabel[option]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+            {resources.length === 0 ? (
+              <p className="text-muted-foreground py-2 text-center text-xs">
+                No resources added yet.
+              </p>
+            ) : (
+              resources.map((resource, index) => (
+                <div key={index} className="space-y-2.5 rounded-lg border p-3">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      placeholder="Resource name (e.g. Aptitude prep sheet)"
+                      value={resource.title}
+                      maxLength={100}
+                      onChange={(e) =>
+                        updateResource(index, { title: e.target.value })
+                      }
+                      disabled={isSubmitting}
+                    />
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       onClick={() => removeResource(index)}
                       disabled={isSubmitting}
+                      aria-label="Remove resource"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
 
-                  <Input
-                    placeholder="Title (optional)"
-                    value={resource.title}
-                    onChange={(e) =>
-                      updateResource(index, { title: e.target.value })
-                    }
+                  <DocumentUpload
+                    compact
+                    value={resource.document}
+                    onChange={(document) => updateResource(index, { document })}
                     disabled={isSubmitting}
                   />
-
-                  {resource.type === "text" ? (
-                    <Textarea
-                      placeholder="Write your notes, questions, or tips here..."
-                      rows={3}
-                      value={resource.content}
-                      onChange={(e) =>
-                        updateResource(index, { content: e.target.value })
-                      }
-                      disabled={isSubmitting}
-                    />
-                  ) : (
-                    <Input
-                      placeholder={
-                        resource.type === "pdf"
-                          ? "https://drive.google.com/..."
-                          : "https://youtube.com/watch?v=..."
-                      }
-                      value={resource.content}
-                      onChange={(e) =>
-                        updateResource(index, { content: e.target.value })
-                      }
-                      disabled={isSubmitting}
-                    />
-                  )}
                 </div>
-              );
-            })}
+              ))
+            )}
           </div>
 
           <Button type="submit" className="w-full" disabled={isSubmitting}>

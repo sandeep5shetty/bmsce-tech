@@ -4,9 +4,14 @@ import { revalidatePath } from "next/cache";
 
 import { asc, count, desc, eq, sql } from "drizzle-orm";
 
-import { getUser } from "@/actions/user";
-
 import { sendEmail } from "@/lib/email";
+import {
+  deleteS3ObjectByUrl,
+  experienceUploadKeyFromUrl,
+  isS3Configured,
+} from "@/lib/s3/storage";
+
+import { getUser } from "@/actions/user";
 
 import db from "@/db";
 import {
@@ -16,8 +21,24 @@ import {
   interviewExperienceRound,
 } from "@/db/schema";
 
-import { CommentWithAuthor, ExperienceListItem, ExperienceWithAuthor } from "./types";
-import { CreateExperienceInput, PostCommentInput } from "./validation";
+import {
+  CommentWithAuthor,
+  ExperienceListItem,
+  ExperienceWithAuthor,
+} from "./types";
+import {
+  CreateExperienceInput,
+  PostCommentInput,
+  RoundOutcome,
+  roundOutcomeOptions,
+} from "./validation";
+
+const knownOutcomes = new Set<string>(roundOutcomeOptions);
+
+/** Legacy rounds predate the outcome column, so anything unknown reads as null. */
+function normalizeOutcome(value: string | null): RoundOutcome | null {
+  return value && knownOutcomes.has(value) ? (value as RoundOutcome) : null;
+}
 
 export async function createExperience(data: CreateExperienceInput) {
   const currentUser = await getUser();
@@ -29,12 +50,15 @@ export async function createExperience(data: CreateExperienceInput) {
       authorId: currentUser.id,
       driveId: data.driveId || null,
       companyName: data.companyName,
+      companyLogoUrl: data.companyLogoUrl || null,
       role: data.role,
       batch: data.batch,
       result: data.result,
       ctcLpa: data.ctcLpa ?? null,
       overview: data.overview,
       preparationResources: data.preparationResources || null,
+      jdUrl: data.jd?.url ?? null,
+      jdFileName: data.jd?.fileName ?? null,
     })
     .returning();
 
@@ -47,6 +71,7 @@ export async function createExperience(data: CreateExperienceInput) {
       roundType: round.roundType,
       description: round.description,
       difficulty: round.difficulty ?? null,
+      outcome: round.outcome ?? null,
     })),
   );
 
@@ -55,8 +80,10 @@ export async function createExperience(data: CreateExperienceInput) {
       data.resources.map((r) => ({
         experienceId: experience.id,
         type: r.type,
-        title: r.title || null,
-        content: r.content,
+        title: r.title,
+        content: r.url,
+        fileName: r.fileName,
+        fileSize: r.fileSize,
       })),
     );
   }
@@ -66,37 +93,21 @@ export async function createExperience(data: CreateExperienceInput) {
 }
 
 export async function getAllExperiences(): Promise<ExperienceListItem[]> {
-  const rows = await db
-    .select({
-      id: interviewExperience.id,
-      authorId: interviewExperience.authorId,
-      driveId: interviewExperience.driveId,
-      companyName: interviewExperience.companyName,
-      role: interviewExperience.role,
-      batch: interviewExperience.batch,
-      result: interviewExperience.result,
-      ctcLpa: interviewExperience.ctcLpa,
-      overview: interviewExperience.overview,
-      preparationResources: interviewExperience.preparationResources,
-      isPublished: interviewExperience.isPublished,
-      isVerified: interviewExperience.isVerified,
-      verifiedBy: interviewExperience.verifiedBy,
-      verifiedAt: interviewExperience.verifiedAt,
-      createdAt: interviewExperience.createdAt,
-      updatedAt: interviewExperience.updatedAt,
-      roundCount: count(interviewExperienceRound.id),
-    })
-    .from(interviewExperience)
-    .leftJoin(
-      interviewExperienceRound,
-      eq(interviewExperience.id, interviewExperienceRound.experienceId),
-    )
-    .where(eq(interviewExperience.isPublished, true))
-    .groupBy(interviewExperience.id)
-    .orderBy(desc(interviewExperience.createdAt));
-
-  const [authorIds, resourceCounts, commentCounts] = await Promise.all([
-    [...new Set(rows.map((r) => r.authorId))],
+  const [rows, roundRows, resourceCounts, commentCounts] = await Promise.all([
+    db
+      .select()
+      .from(interviewExperience)
+      .where(eq(interviewExperience.isPublished, true))
+      .orderBy(desc(interviewExperience.createdAt)),
+    // Pulled in full rather than aggregated in SQL because the listing card
+    // renders a per-round outcome rail, not just a round count.
+    db
+      .select({
+        experienceId: interviewExperienceRound.experienceId,
+        outcome: interviewExperienceRound.outcome,
+      })
+      .from(interviewExperienceRound)
+      .orderBy(asc(interviewExperienceRound.roundNumber)),
     db
       .select({
         experienceId: interviewExperienceResource.experienceId,
@@ -113,6 +124,7 @@ export async function getAllExperiences(): Promise<ExperienceListItem[]> {
       .groupBy(interviewExperienceComment.experienceId),
   ]);
 
+  const authorIds = [...new Set(rows.map((r) => r.authorId))];
   const authors = authorIds.length
     ? await db.query.user.findMany({
         where: (u, { inArray }) => inArray(u.id, authorIds),
@@ -120,6 +132,15 @@ export async function getAllExperiences(): Promise<ExperienceListItem[]> {
       })
     : [];
   const authorById = new Map(authors.map((a) => [a.id, a]));
+
+  const outcomesById = new Map<string, (RoundOutcome | null)[]>();
+  for (const round of roundRows) {
+    const outcome = normalizeOutcome(round.outcome);
+    const existing = outcomesById.get(round.experienceId);
+    if (existing) existing.push(outcome);
+    else outcomesById.set(round.experienceId, [outcome]);
+  }
+
   const resourceCountById = new Map(
     resourceCounts.map((r) => [r.experienceId, r.resourceCount]),
   );
@@ -127,30 +148,39 @@ export async function getAllExperiences(): Promise<ExperienceListItem[]> {
     commentCounts.map((c) => [c.experienceId, c.commentCount]),
   );
 
-  return rows.map((row) => ({
-    ...row,
-    author: authorById.get(row.authorId) ?? {
-      id: row.authorId,
-      name: null,
-      image: null,
-    },
-    resourceCount: resourceCountById.get(row.id) ?? 0,
-    commentCount: commentCountById.get(row.id) ?? 0,
-  }));
+  return rows.map((row) => {
+    const roundOutcomes = outcomesById.get(row.id) ?? [];
+    return {
+      ...row,
+      author: authorById.get(row.authorId) ?? {
+        id: row.authorId,
+        name: null,
+        image: null,
+      },
+      roundCount: roundOutcomes.length,
+      clearedRoundCount: roundOutcomes.filter((o) => o === "Cleared").length,
+      roundOutcomes,
+      resourceCount: resourceCountById.get(row.id) ?? 0,
+      commentCount: commentCountById.get(row.id) ?? 0,
+    };
+  });
 }
 
 export async function getExperienceStats() {
-  const [[experienceStats], [resourceStats], [commentStats]] =
+  const [[experienceStats], [resourceStats], [commentStats], [roundStats]] =
     await Promise.all([
       db
         .select({
           total: count(interviewExperience.id),
-          companies: count(sql<string>`distinct ${interviewExperience.companyName}`),
+          companies: count(
+            sql<string>`distinct ${interviewExperience.companyName}`,
+          ),
         })
         .from(interviewExperience)
         .where(eq(interviewExperience.isPublished, true)),
       db.select({ total: count() }).from(interviewExperienceResource),
       db.select({ total: count() }).from(interviewExperienceComment),
+      db.select({ total: count() }).from(interviewExperienceRound),
     ]);
 
   return {
@@ -158,6 +188,7 @@ export async function getExperienceStats() {
     companyCount: experienceStats?.companies ?? 0,
     resourceCount: resourceStats?.total ?? 0,
     commentCount: commentStats?.total ?? 0,
+    roundCount: roundStats?.total ?? 0,
   };
 }
 
@@ -182,7 +213,8 @@ export async function deleteExperience(id: string) {
 
   const experience = await db.query.interviewExperience.findFirst({
     where: eq(interviewExperience.id, id),
-    columns: { authorId: true },
+    columns: { authorId: true, jdUrl: true, companyLogoUrl: true },
+    with: { resources: { columns: { content: true } } },
   });
   if (!experience) throw new Error("Experience not found");
   if (experience.authorId !== currentUser.id) {
@@ -190,6 +222,28 @@ export async function deleteExperience(id: string) {
   }
 
   await db.delete(interviewExperience).where(eq(interviewExperience.id, id));
+
+  // Best-effort S3 cleanup so deleting a writeup doesn't leave its uploaded
+  // logo and documents orphaned in the bucket. The DB row is already gone at
+  // this point, so a storage failure must not surface as a failed delete.
+  const uploadedUrls = [
+    experience.jdUrl,
+    experience.companyLogoUrl,
+    ...experience.resources.map((r) => r.content),
+  ].filter((url): url is string => Boolean(url));
+
+  if (uploadedUrls.length > 0 && isS3Configured()) {
+    await Promise.all(
+      uploadedUrls.map(async (url) => {
+        if (!experienceUploadKeyFromUrl(url)) return;
+        try {
+          await deleteS3ObjectByUrl(url);
+        } catch (error) {
+          console.error("Failed to delete experience upload from S3:", error);
+        }
+      }),
+    );
+  }
 
   revalidatePath("/experiences");
 }
@@ -230,7 +284,7 @@ export async function postComment(
     try {
       await sendEmail({
         to: experience.author.email,
-        subject: `New question on your ${experience.companyName} interview experience`,
+        subject: `New question on your ${experience.companyName} placement experience`,
         text: `${currentUser.name ?? "Someone"} asked a question on your ${experience.companyName} experience:\n\n"${data.body}"\n\nReply on bmsce.tech: ${process.env.NEXT_PUBLIC_APP_URL ?? ""}/experiences/${experience.id}`,
       });
     } catch (error) {

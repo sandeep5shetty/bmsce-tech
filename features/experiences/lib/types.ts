@@ -6,6 +6,8 @@ import {
   User,
 } from "@/types";
 
+import { RoundOutcome } from "./validation";
+
 export type ExperienceWithAuthor = InterviewExperience & {
   author: Pick<User, "id" | "name" | "image">;
   rounds: InterviewExperienceRound[];
@@ -19,6 +21,9 @@ export type CommentWithAuthor = InterviewExperienceComment & {
 export type ExperienceListItem = InterviewExperience & {
   author: Pick<User, "id" | "name" | "image">;
   roundCount: number;
+  clearedRoundCount: number;
+  /** Round outcomes in round order — null where the author didn't record one. */
+  roundOutcomes: (RoundOutcome | null)[];
   resourceCount: number;
   commentCount: number;
 };

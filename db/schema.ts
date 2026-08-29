@@ -317,7 +317,10 @@ export const placementAcademicRecord = pgTable("placement_academic_record", {
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
 });
 
-// InterviewExperience Table (seniors sharing placement/interview writeups)
+// InterviewExperience Table (seniors sharing placement writeups — covers the
+// whole process: aptitude, OA, coding, interviews. Table names kept as
+// "interview_experience*" for continuity with existing prod data; the feature
+// is surfaced to users as "Placement Experiences".)
 export const interviewExperience = pgTable("interview_experience", {
   id: text("id")
     .primaryKey()
@@ -329,12 +332,20 @@ export const interviewExperience = pgTable("interview_experience", {
     onDelete: "set null",
   }),
   companyName: text("company_name").notNull(),
+  // Optional company logo uploaded to S3. Null falls back to the generated
+  // gradient-and-initial tile from company-color.ts.
+  companyLogoUrl: text("company_logo_url"),
   role: text("role").notNull(),
   batch: text("batch").notNull(),
   result: text("result").notNull(), // "Selected" | "Rejected" | "Waitlisted"
   ctcLpa: real("ctc_lpa"),
   overview: text("overview").notNull(),
   preparationResources: text("preparation_resources"),
+  // Job description document (PDF/DOCX) uploaded to S3. jdFileName keeps the
+  // uploader's original filename so downloads land with a readable name
+  // instead of the UUID the S3 key uses.
+  jdUrl: text("jd_url"),
+  jdFileName: text("jd_file_name"),
   isPublished: boolean("is_published").notNull().default(true),
   isVerified: boolean("is_verified").notNull().default(false),
   verifiedBy: text("verified_by").references(() => user.id, {
@@ -356,17 +367,21 @@ export const interviewExperienceRound = pgTable(
       .notNull()
       .references(() => interviewExperience.id, { onDelete: "cascade" }),
     roundNumber: integer("round_number").notNull(),
-    roundType: text("round_type").notNull(), // "OA" | "Technical" | "HR" | "Managerial" | "GD" | "System Design" | "Other"
+    roundType: text("round_type").notNull(), // "Aptitude" | "OA" | "Coding" | "Technical" | "System Design" | "GD" | "Managerial" | "HR" | "Assignment" | "Other"
     description: text("description").notNull(),
     difficulty: text("difficulty"), // "Easy" | "Medium" | "Hard"
+    // Did the candidate clear this round? "Cleared" | "Not Cleared" |
+    // "Awaiting Result". Nullable because rounds written before this column
+    // existed have no recorded outcome.
+    outcome: text("outcome"),
   },
   (t) => [
     index("interview_experience_round_experience_idx").on(t.experienceId),
   ],
 );
 
-// InterviewExperienceResource Table (question-bank material for one company's
-// experience — a PDF link, a YouTube link, or a plain text note)
+// InterviewExperienceResource Table (extra resources attached to an
+// experience — PDF/DOCX documents uploaded to S3, each with its own name)
 export const interviewExperienceResource = pgTable(
   "interview_experience_resource",
   {
@@ -376,9 +391,13 @@ export const interviewExperienceResource = pgTable(
     experienceId: text("experience_id")
       .notNull()
       .references(() => interviewExperience.id, { onDelete: "cascade" }),
-    type: text("type").notNull(), // "pdf" | "youtube" | "text"
-    title: text("title"),
-    content: text("content").notNull(), // URL for pdf/youtube, note body for text
+    type: text("type").notNull(), // "pdf" | "docx"
+    // Author-supplied display name — required, so every resource is
+    // identifiable without opening it.
+    title: text("title").notNull(),
+    content: text("content").notNull(), // S3 URL of the uploaded document
+    fileName: text("file_name"), // original upload filename, used for downloads
+    fileSize: integer("file_size"), // bytes, for the "2.4 MB" hint in the UI
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [

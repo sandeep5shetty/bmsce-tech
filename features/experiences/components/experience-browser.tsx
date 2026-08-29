@@ -4,13 +4,23 @@ import { useMemo, useState } from "react";
 
 import { Search } from "lucide-react";
 
-import { EmptyAddCard } from "@/components/common/empty-add-card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import { EmptyAddCard } from "@/components/common/empty-add-card";
 
 import { ExperienceListItem } from "../lib/types";
 import { ExperienceCard } from "./experience-card";
 
 type FilterKey = "all" | "verified" | "selected";
+
+const ALL_BATCHES = "__all__";
 
 const filters: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
@@ -25,12 +35,21 @@ export function ExperienceBrowser({
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [batch, setBatch] = useState(ALL_BATCHES);
+
+  // Driven by what has actually been shared rather than the full batch list, so
+  // the dropdown never offers a batch with zero experiences behind it.
+  const batches = useMemo(
+    () => [...new Set(experiences.map((e) => e.batch))].sort().reverse(),
+    [experiences],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return experiences.filter((exp) => {
       if (filter === "verified" && !exp.isVerified) return false;
       if (filter === "selected" && exp.result !== "Selected") return false;
+      if (batch !== ALL_BATCHES && exp.batch !== batch) return false;
       if (!q) return true;
       return (
         exp.companyName.toLowerCase().includes(q) ||
@@ -38,7 +57,7 @@ export function ExperienceBrowser({
         exp.batch.toLowerCase().includes(q)
       );
     });
-  }, [experiences, search, filter]);
+  }, [experiences, search, filter, batch]);
 
   return (
     <div className="space-y-6">
@@ -52,6 +71,21 @@ export function ExperienceBrowser({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        {batches.length > 1 && (
+          <Select value={batch} onValueChange={setBatch}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_BATCHES}>All batches</SelectItem>
+              {batches.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <div className="flex flex-wrap gap-2">
           {filters.map((f) => (
             <button
