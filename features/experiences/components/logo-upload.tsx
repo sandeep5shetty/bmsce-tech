@@ -70,19 +70,20 @@ export function LogoUpload({
 
   if (value) {
     return (
-      <div className="bg-card relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border">
+      <div className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-zinc-50 dark:bg-zinc-100">
         <Image
           src={value}
           alt="Company logo"
           fill
           sizes="64px"
+          unoptimized
           className="object-contain p-1"
         />
         <Button
           type="button"
-          variant="destructive"
+          variant="secondary"
           size="icon"
-          className="absolute -top-2 -right-2 h-5 w-5"
+          className="absolute top-1 right-1 h-5 w-5 border bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
           onClick={() => onChange(null)}
           disabled={disabled}
           aria-label="Remove logo"

@@ -121,3 +121,9 @@ export const createExperienceSchema = z.object({
 });
 
 export type CreateExperienceInput = z.infer<typeof createExperienceSchema>;
+
+export const updateExperienceSchema = createExperienceSchema.extend({
+  id: z.string().min(1),
+});
+
+export type UpdateExperienceInput = z.infer<typeof updateExperienceSchema>;

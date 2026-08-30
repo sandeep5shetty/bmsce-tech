@@ -30,6 +30,7 @@ import {
   CreateExperienceInput,
   PostCommentInput,
   RoundOutcome,
+  UpdateExperienceInput,
   roundOutcomeOptions,
 } from "./validation";
 
@@ -90,6 +91,126 @@ export async function createExperience(data: CreateExperienceInput) {
 
   revalidatePath("/experiences");
   return experience;
+}
+
+async function deleteRemovedExperienceUploads(
+  previousUrls: string[],
+  nextUrls: string[],
+) {
+  if (!isS3Configured()) return;
+
+  const nextSet = new Set(nextUrls.filter(Boolean));
+  const removed = previousUrls.filter((url) => url && !nextSet.has(url));
+
+  if (removed.length === 0) return;
+
+  await Promise.all(
+    removed.map(async (url) => {
+      if (!experienceUploadKeyFromUrl(url)) return;
+      try {
+        await deleteS3ObjectByUrl(url);
+      } catch (error) {
+        console.error("Failed to delete experience upload from S3:", error);
+      }
+    }),
+  );
+}
+
+export async function updateExperience(data: UpdateExperienceInput) {
+  const currentUser = await getUser();
+  if (!currentUser) throw new Error("Unauthorized");
+
+  const existing = await db.query.interviewExperience.findFirst({
+    where: eq(interviewExperience.id, data.id),
+    columns: {
+      id: true,
+      authorId: true,
+      driveId: true,
+      isPublished: true,
+      jdUrl: true,
+      companyLogoUrl: true,
+    },
+    with: { resources: { columns: { content: true } } },
+  });
+
+  if (!existing) throw new Error("Experience not found");
+  if (existing.authorId !== currentUser.id) {
+    throw new Error("You can only edit your own experience");
+  }
+
+  const nextJdUrl = data.jd?.url ?? null;
+  const nextLogoUrl = data.companyLogoUrl || null;
+  const nextResourceUrls = data.resources.map((resource) => resource.url);
+
+  await db
+    .update(interviewExperience)
+    .set({
+      companyName: data.companyName,
+      companyLogoUrl: nextLogoUrl,
+      role: data.role,
+      batch: data.batch,
+      result: data.result,
+      ctcLpa: data.ctcLpa ?? null,
+      overview: data.overview,
+      preparationResources: data.preparationResources || null,
+      jdUrl: nextJdUrl,
+      jdFileName: data.jd?.fileName ?? null,
+      isVerified: false,
+      verifiedBy: null,
+      verifiedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(interviewExperience.id, data.id));
+
+  await db
+    .delete(interviewExperienceRound)
+    .where(eq(interviewExperienceRound.experienceId, data.id));
+  await db
+    .delete(interviewExperienceResource)
+    .where(eq(interviewExperienceResource.experienceId, data.id));
+
+  await db.insert(interviewExperienceRound).values(
+    data.rounds.map((round) => ({
+      experienceId: data.id,
+      roundNumber: round.roundNumber,
+      roundType: round.roundType,
+      description: round.description,
+      difficulty: round.difficulty ?? null,
+      outcome: round.outcome ?? null,
+    })),
+  );
+
+  if (data.resources.length > 0) {
+    await db.insert(interviewExperienceResource).values(
+      data.resources.map((resource) => ({
+        experienceId: data.id,
+        type: resource.type,
+        title: resource.title,
+        content: resource.url,
+        fileName: resource.fileName,
+        fileSize: resource.fileSize,
+      })),
+    );
+  }
+
+  const previousUrls = [
+    existing.jdUrl,
+    existing.companyLogoUrl,
+    ...existing.resources.map((resource) => resource.content),
+  ].filter((url): url is string => Boolean(url));
+  const nextUrls = [
+    nextJdUrl,
+    nextLogoUrl,
+    ...nextResourceUrls,
+  ].filter((url): url is string => Boolean(url));
+
+  await deleteRemovedExperienceUploads(previousUrls, nextUrls);
+
+  revalidatePath("/experiences");
+  revalidatePath(`/experiences/${data.id}`);
+  revalidatePath(`/experiences/${data.id}/edit`);
+
+  return { id: data.id };
 }
 
 export async function getAllExperiences(): Promise<ExperienceListItem[]> {

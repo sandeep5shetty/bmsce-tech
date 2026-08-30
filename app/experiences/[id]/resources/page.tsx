@@ -1,12 +1,12 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { ArrowLeft, Download } from "lucide-react";
+import { Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 import { CompanyAvatar } from "@/features/experiences/components/company-avatar";
+import { ExperiencesBackLink } from "@/features/experiences/components/experiences-back-link";
 import {
   documentHref,
   documentMeta,
@@ -27,28 +27,21 @@ export default async function ExperienceResourcesPage({
 
   return (
     <div className="container mx-auto mt-8 mb-32 max-w-3xl space-y-6 px-6">
-      <div>
-        <Link
-          href={`/experiences/${experience.id}`}
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to {experience.companyName}
-        </Link>
-        <div className="mt-3 flex items-center gap-3">
-          <CompanyAvatar
-            companyName={experience.companyName}
-            logoUrl={experience.companyLogoUrl}
-            size="h-11 w-11 rounded-xl text-base"
-          />
-          <div>
-            <h1 className="font-serif text-2xl font-normal">
-              {experience.companyName} Resources
-            </h1>
-            <p className="text-muted-foreground text-sm">
-              Shared by {experience.author.name ?? "the author"}
-            </p>
-          </div>
+      <ExperiencesBackLink />
+
+      <div className="flex items-center gap-3">
+        <CompanyAvatar
+          companyName={experience.companyName}
+          logoUrl={experience.companyLogoUrl}
+          size="h-11 w-11 rounded-xl text-base"
+        />
+        <div>
+          <h1 className="font-serif text-2xl font-normal">
+            {experience.companyName} Resources
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            Shared by {experience.author.name ?? "the author"}
+          </p>
         </div>
       </div>
 

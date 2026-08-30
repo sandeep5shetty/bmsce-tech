@@ -7,6 +7,7 @@ import {
   Download,
   IndianRupee,
   Paperclip,
+  Pencil,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -16,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { CompanyAvatar } from "@/features/experiences/components/company-avatar";
 import { DeleteExperienceButton } from "@/features/experiences/components/delete-experience-button";
+import { ExperiencesBackLink } from "@/features/experiences/components/experiences-back-link";
 import {
   documentHref,
   documentMeta,
@@ -27,6 +29,7 @@ import {
   roundOutcomeMeta,
   toRoundOutcome,
 } from "@/features/experiences/components/round-outcome";
+import { RoundTimelineDot } from "@/features/experiences/components/round-timeline-dot";
 import { VerifyExperienceButton } from "@/features/experiences/components/verify-experience-button";
 import { getComments, getExperience } from "@/features/experiences/lib/actions";
 import {
@@ -41,12 +44,6 @@ const resultColor: Record<string, string> = {
   Rejected: "bg-red-500 text-white hover:bg-red-600",
   Waitlisted: "bg-amber-500 text-white hover:bg-amber-600",
   "In Process": "bg-sky-500 text-white hover:bg-sky-600",
-};
-
-const dotColor: Record<string, string> = {
-  Easy: "bg-emerald-500",
-  Medium: "bg-amber-500",
-  Hard: "bg-red-500",
 };
 
 export default async function ExperienceDetailPage({
@@ -74,6 +71,8 @@ export default async function ExperienceDetailPage({
 
   return (
     <div className="container mx-auto mt-8 mb-32 max-w-5xl space-y-8 px-6">
+      <ExperiencesBackLink />
+
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-4">
           <CompanyAvatar
@@ -129,7 +128,17 @@ export default async function ExperienceDetailPage({
                 isVerified={experience.isVerified}
               />
             )}
-            {isAuthor && <DeleteExperienceButton id={experience.id} />}
+            {isAuthor && (
+              <>
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/experiences/${experience.id}/edit`}>
+                    <Pencil className="mr-1.5 h-4 w-4" />
+                    Edit
+                  </Link>
+                </Button>
+                <DeleteExperienceButton id={experience.id} />
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -194,18 +203,10 @@ export default async function ExperienceDetailPage({
                 const outcome = toRoundOutcome(round.outcome);
                 return (
                   <div key={round.id} className="relative">
-                    {/* Same plain dot the timeline has always used — coloured by
-                        outcome, falling back to difficulty for rounds saved
-                        before outcomes existed. */}
-                    <span
-                      className={`ring-background absolute top-1 -left-[27px] h-4 w-4 rounded-full ring-4 ${
-                        outcome
-                          ? roundOutcomeMeta[outcome].dot
-                          : round.difficulty
-                            ? (dotColor[round.difficulty] ??
-                              "bg-muted-foreground")
-                            : "bg-muted-foreground"
-                      }`}
+                    <RoundTimelineDot
+                      roundType={round.roundType}
+                      outcome={outcome}
+                      difficulty={round.difficulty}
                     />
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-semibold">

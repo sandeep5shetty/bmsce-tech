@@ -26,7 +26,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-import { createExperience } from "../lib/actions";
+import { createExperience, updateExperience } from "../lib/actions";
+import { ExperienceFormInitialData } from "../lib/experience-form-input";
 import {
   ExperienceRoundInput,
   ResourceInput,
@@ -38,6 +39,7 @@ import {
   roundOutcomeOptions,
   roundTypeLabel,
   roundTypeOptions,
+  updateExperienceSchema,
 } from "../lib/validation";
 import { BatchCombobox } from "./batch-combobox";
 import { DocumentUpload, UploadedDocument } from "./document-upload";
@@ -107,22 +109,41 @@ function RoundOutcomePicker({
   );
 }
 
-export function ExperienceForm() {
+export function ExperienceForm({
+  experienceId,
+  initialData,
+}: {
+  experienceId?: string;
+  initialData?: ExperienceFormInitialData;
+}) {
   const router = useRouter();
+  const isEditing = Boolean(experienceId);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [companyName, setCompanyName] = useState("");
-  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
-  const [role, setRole] = useState("");
-  const [batch, setBatch] = useState("");
-  const [result, setResult] =
-    useState<(typeof resultOptions)[number]>("Selected");
-  const [ctcLpa, setCtcLpa] = useState("");
-  const [overview, setOverview] = useState("");
-  const [preparationResources, setPreparationResources] = useState("");
-  const [jd, setJd] = useState<UploadedDocument | null>(null);
-  const [rounds, setRounds] = useState<ExperienceRoundInput[]>([emptyRound(1)]);
-  const [resources, setResources] = useState<ResourceDraft[]>([]);
+  const [companyName, setCompanyName] = useState(initialData?.companyName ?? "");
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(
+    initialData?.companyLogoUrl ?? null,
+  );
+  const [role, setRole] = useState(initialData?.role ?? "");
+  const [batch, setBatch] = useState(initialData?.batch ?? "");
+  const [result, setResult] = useState<(typeof resultOptions)[number]>(
+    initialData?.result ?? "Selected",
+  );
+  const [ctcLpa, setCtcLpa] = useState(initialData?.ctcLpa ?? "");
+  const [overview, setOverview] = useState(initialData?.overview ?? "");
+  const [preparationResources, setPreparationResources] = useState(
+    initialData?.preparationResources ?? "",
+  );
+  const [jd, setJd] = useState<UploadedDocument | null>(initialData?.jd ?? null);
+  const [rounds, setRounds] = useState<ExperienceRoundInput[]>(
+    initialData?.rounds.length ? initialData.rounds : [emptyRound(1)],
+  );
+  const [resources, setResources] = useState<ResourceDraft[]>(
+    initialData?.resources.map((resource) => ({
+      title: resource.title,
+      document: resource.document,
+    })) ?? [],
+  );
 
   function updateRound(index: number, patch: Partial<ExperienceRoundInput>) {
     setRounds((prev) =>
@@ -179,7 +200,7 @@ export function ExperienceForm() {
       fileSize: r.document!.fileSize,
     }));
 
-    const parsed = createExperienceSchema.safeParse({
+    const payload = {
       companyName,
       companyLogoUrl: companyLogoUrl ?? undefined,
       role,
@@ -191,25 +212,52 @@ export function ExperienceForm() {
       jd: jd ? (jd satisfies UploadedDocumentInput) : undefined,
       rounds,
       resources: resourceInputs,
-    });
-
-    if (!parsed.success) {
-      const errors = parsed.error.flatten().fieldErrors;
-      const roundErrors = parsed.error.flatten().formErrors;
-      const first =
-        Object.values(errors).flat()[0] ?? roundErrors[0] ?? "Validation error";
-      toast.error(first);
-      return;
-    }
+    };
 
     setIsSubmitting(true);
     try {
-      const experience = await createExperience(parsed.data);
-      toast.success("Experience shared, thank you!");
-      router.push(`/experiences/${experience.id}`);
+      if (isEditing) {
+        const updateParsed = updateExperienceSchema.safeParse({
+          id: experienceId,
+          ...payload,
+        });
+        if (!updateParsed.success) {
+          const errors = updateParsed.error.flatten().fieldErrors;
+          const roundErrors = updateParsed.error.flatten().formErrors;
+          const first =
+            Object.values(errors).flat()[0] ??
+            roundErrors[0] ??
+            "Validation error";
+          toast.error(first);
+          return;
+        }
+        await updateExperience(updateParsed.data);
+        toast.success("Experience updated.");
+        router.push(`/experiences/${experienceId}`);
+      } else {
+        const createParsed = createExperienceSchema.safeParse(payload);
+        if (!createParsed.success) {
+          const errors = createParsed.error.flatten().fieldErrors;
+          const roundErrors = createParsed.error.flatten().formErrors;
+          const first =
+            Object.values(errors).flat()[0] ??
+            roundErrors[0] ??
+            "Validation error";
+          toast.error(first);
+          return;
+        }
+        const experience = await createExperience(createParsed.data);
+        toast.success("Experience shared, thank you!");
+        router.push(`/experiences/${experience.id}`);
+      }
+      router.refresh();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to share experience",
+        error instanceof Error
+          ? error.message
+          : isEditing
+            ? "Failed to update experience"
+            : "Failed to share experience",
       );
     } finally {
       setIsSubmitting(false);
@@ -219,10 +267,15 @@ export function ExperienceForm() {
   return (
     <Card className="mx-auto w-full max-w-2xl">
       <CardHeader>
-        <CardTitle>Share Your Placement Experience</CardTitle>
+        <CardTitle>
+          {isEditing
+            ? "Edit Your Placement Experience"
+            : "Share Your Placement Experience"}
+        </CardTitle>
         <CardDescription>
-          Help juniors prepare — the whole process, from the aptitude test and
-          OA to the final interview.
+          {isEditing
+            ? "Update your writeup — changes will remove the verified badge until a coordinator reviews it again."
+            : "Help juniors prepare — the whole process, from the aptitude test and OA to the final interview."}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -556,7 +609,13 @@ export function ExperienceForm() {
           </div>
 
           <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? "Sharing..." : "Share Experience"}
+            {isSubmitting
+              ? isEditing
+                ? "Saving..."
+                : "Sharing..."
+              : isEditing
+                ? "Save Changes"
+                : "Share Experience"}
           </Button>
         </form>
       </CardContent>

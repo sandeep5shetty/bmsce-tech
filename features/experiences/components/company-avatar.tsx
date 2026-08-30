@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 import Image from "next/image";
 
 import { companyGradient, companyInitial } from "../lib/company-color";
@@ -20,17 +24,21 @@ export function CompanyAvatar({
   size: string;
   className?: string;
 }) {
-  if (logoUrl) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  if (logoUrl && !imageFailed) {
     return (
       <div
-        className={`bg-card relative shrink-0 overflow-hidden border ${size} ${className}`}
+        className={`relative shrink-0 overflow-hidden border border-border/60 bg-zinc-50 dark:bg-zinc-100 ${size} ${className}`}
       >
         <Image
           src={logoUrl}
           alt={`${companyName} logo`}
           fill
           sizes="96px"
+          unoptimized
           className="object-contain p-1"
+          onError={() => setImageFailed(true)}
         />
       </div>
     );

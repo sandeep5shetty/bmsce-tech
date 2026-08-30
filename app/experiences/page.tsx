@@ -33,11 +33,7 @@ export default async function ExperiencesPage() {
 
   return (
     <div>
-      <div className="relative overflow-hidden">
-        <div className="from-primary/25 pointer-events-none absolute -top-32 -right-16 h-96 w-96 rounded-full bg-linear-to-br to-transparent blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-40 -left-20 h-80 w-80 rounded-full bg-linear-to-br from-fuchsia-500/20 to-transparent blur-3xl" />
-
-        <div className="relative container mx-auto max-w-6xl px-6 pt-16 pb-10">
+      <div className="container mx-auto max-w-6xl px-6 pt-16 pb-10">
           <span className="text-primary bg-primary/10 mb-4 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold">
             <Sparkles className="h-3.5 w-3.5" />
             Community Knowledge Base
@@ -58,7 +54,6 @@ export default async function ExperiencesPage() {
               <CoordinatorSetup prominent />
             )}
           </div>
-        </div>
       </div>
 
       <div className="container mx-auto mb-10 grid max-w-6xl grid-cols-2 gap-3 px-6 sm:grid-cols-3 lg:grid-cols-5">

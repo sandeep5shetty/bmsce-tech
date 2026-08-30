@@ -2,11 +2,17 @@ import { Badge } from "@/components/ui/badge";
 
 import { RoundOutcome } from "../lib/validation";
 
+/** Difficulty fallback colours for legacy rounds without an outcome recorded. */
+export const difficultyMeta: Record<string, { dot: string }> = {
+  Easy: { dot: "bg-emerald-500" },
+  Medium: { dot: "bg-amber-500" },
+  Hard: { dot: "bg-red-500" },
+};
+
 /**
  * Single source of truth for how a round outcome looks — the card, the detail
  * timeline and the example showcase all read from here so "Cleared" is the
- * same green everywhere. Colour and text only, no icons: the round timeline
- * keeps the plain-dot look it has always had.
+ * same green everywhere.
  */
 export const roundOutcomeMeta: Record<
   RoundOutcome,

@@ -9,8 +9,8 @@ import { documentMeta } from "./document-link";
 import {
   RoundOutcomeBadge,
   RoundProgressRail,
-  roundOutcomeMeta,
 } from "./round-outcome";
+import { RoundTimelineDot } from "./round-timeline-dot";
 
 const exampleRounds = [
   {
@@ -123,11 +123,13 @@ export function ExperienceShowcase() {
           <CardContent>
             <div className="relative space-y-5 border-l-2 pl-6">
               {exampleRounds.map((round) => {
-                const meta = roundOutcomeMeta[round.outcome];
                 return (
                   <div key={round.id} className="relative">
-                    <span
-                      className={`ring-background absolute top-1 -left-[27px] h-3.5 w-3.5 rounded-full ring-4 ${meta.dot}`}
+                    <RoundTimelineDot
+                      roundType={round.roundType}
+                      outcome={round.outcome}
+                      difficulty={round.difficulty}
+                      size="sm"
                     />
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-semibold">
