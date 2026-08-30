@@ -1630,24 +1630,85 @@ export async function getQuizAnalytics(sessionId: string) {
     );
   }
 
-  const snapshots = await db.query.quizAnalyticsSnapshot.findMany({
-    where: eq(quizAnalyticsSnapshot.sessionId, sessionId),
-    with: {
-      question: {
-        with: { answerOptions: { orderBy: asc(quizAnswerOption.position) } },
+  const [snapshots, participants, answers] = await Promise.all([
+    db.query.quizAnalyticsSnapshot.findMany({
+      where: eq(quizAnalyticsSnapshot.sessionId, sessionId),
+      with: {
+        question: {
+          with: { answerOptions: { orderBy: asc(quizAnswerOption.position) } },
+        },
       },
-    },
-    orderBy: asc(quizAnalyticsSnapshot.questionId),
-  });
+      orderBy: asc(quizAnalyticsSnapshot.questionId),
+    }),
+    db.query.quizSessionParticipant.findMany({
+      where: eq(quizSessionParticipant.sessionId, sessionId),
+      columns: {
+        id: true,
+        displayName: true,
+        avatar: true,
+        totalScore: true,
+        rank: true,
+      },
+      orderBy: [
+        desc(quizSessionParticipant.totalScore),
+        asc(quizSessionParticipant.displayName),
+      ],
+    }),
+    // Raw per-participant answers so the analytics UI can show WHO picked
+    // each option, not just how many. Names resolve client-side through the
+    // participants list to avoid repeating them on every answer row.
+    db.query.quizParticipantAnswer.findMany({
+      where: eq(quizParticipantAnswer.sessionId, sessionId),
+      columns: {
+        participantId: true,
+        questionId: true,
+        selectedOptionIds: true,
+        openTextResponse: true,
+        ratingValue: true,
+        isCorrect: true,
+        scoreAwarded: true,
+        responseTimeMs: true,
+      },
+    }),
+  ]);
 
-  const [{ value: participantCount }] = await db
-    .select({ value: count() })
-    .from(quizSessionParticipant)
-    .where(eq(quizSessionParticipant.sessionId, sessionId));
+  const correctCountByParticipant = new Map<string, number>();
+  const answeredCountByParticipant = new Map<string, number>();
+  for (const answer of answers) {
+    answeredCountByParticipant.set(
+      answer.participantId,
+      (answeredCountByParticipant.get(answer.participantId) ?? 0) + 1,
+    );
+    if (answer.isCorrect) {
+      correctCountByParticipant.set(
+        answer.participantId,
+        (correctCountByParticipant.get(answer.participantId) ?? 0) + 1,
+      );
+    }
+  }
 
   return {
     sessionId,
-    participantCount,
+    participantCount: participants.length,
+    participants: participants.map((p) => ({
+      id: p.id,
+      display_name: p.displayName,
+      avatar: p.avatar,
+      total_score: p.totalScore,
+      rank: p.rank,
+      answered_count: answeredCountByParticipant.get(p.id) ?? 0,
+      correct_count: correctCountByParticipant.get(p.id) ?? 0,
+    })),
+    answers: answers.map((a) => ({
+      participant_id: a.participantId,
+      question_id: a.questionId,
+      selected_option_ids: a.selectedOptionIds,
+      open_text_response: a.openTextResponse,
+      rating_value: a.ratingValue,
+      is_correct: a.isCorrect,
+      score_awarded: a.scoreAwarded,
+      response_time_ms: a.responseTimeMs,
+    })),
     snapshots: snapshots.map((s) =>
       serializeQuizAnalyticsSnapshot({
         ...s,
