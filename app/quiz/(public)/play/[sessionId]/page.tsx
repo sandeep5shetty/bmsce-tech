@@ -10,6 +10,7 @@ import { QuizAvatar } from "@/features/quiz/components/quiz-avatar"
 import { QuizAvatarPicker } from "@/features/quiz/components/quiz-avatar-picker"
 import { QuizEventBrand } from "@/features/quiz/components/quiz-brand-logo"
 import { QuizFinalLeaderboard } from "@/features/quiz/components/quiz-final-leaderboard"
+import { QuizQuestionLeaderboard } from "@/features/quiz/components/quiz-question-leaderboard"
 import { useQuizFullscreen } from "@/features/quiz/hooks/use-quiz-fullscreen"
 import { DEFAULT_QUIZ_AVATAR } from "@/features/quiz/lib/quiz-avatars"
 import {
@@ -207,7 +208,6 @@ export default function PlayPage() {
           setSelectedOptionIds([])
           setSubmittedForQuestion(null)
           setResultsData(null)
-          setLeaderboardData(null)
           setAnsweredCount(0)
         }
       })
@@ -630,7 +630,12 @@ export default function PlayPage() {
     return (
       <>
         <QuizFullscreenGuard active={focusEnforcementActive} state={fullscreen} />
-        <ParticipantLeaderboardView entries={leaderboardData.entries} participantId={participantId} isFinal={false} />
+        <QuizQuestionLeaderboard
+          entries={leaderboardData.entries}
+          variant="participant"
+          highlightParticipantId={participantId}
+          showWaitingHint
+        />
       </>
     )
   }
@@ -997,59 +1002,6 @@ function ResultFeedbackView({
         </div>
       )}
       <p className="text-sm text-muted-foreground">Waiting for leaderboard…</p>
-    </div>
-  )
-}
-
-function ParticipantLeaderboardView({
-  entries, participantId, isFinal,
-}: {
-  entries: LeaderboardEntry[]
-  participantId: string | null
-  isFinal: boolean
-}) {
-  const top10 = entries.slice(0, 10)
-  const myEntry = entries.find((e) => e.participantId === participantId)
-  const myRankInTop10 = top10.some((e) => e.participantId === participantId)
-
-  return (
-    <div className="min-h-screen flex flex-col bg-background px-4 py-8 space-y-6">
-      <h2 className="text-2xl font-bold text-center">{isFinal ? "🏆 Final Leaderboard" : "Leaderboard"}</h2>
-      <div className="space-y-2 max-w-sm mx-auto w-full">
-        {top10.map((entry) => {
-          const isMe = entry.participantId === participantId
-          return (
-            <div key={entry.participantId}
-              className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition-all duration-500 ${isMe ? "border-primary bg-primary/10 ring-2 ring-primary" : "bg-card"}`}>
-              <span className="text-lg font-black w-8 text-center text-muted-foreground">
-                {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉" : `#${entry.rank}`}
-              </span>
-              <QuizAvatar emoji={entry.avatar} size="xl" />
-              <span className="flex-1 font-semibold truncate text-sm">{entry.displayName}{isMe ? " (you)" : ""}</span>
-              <div className="text-right">
-                <p className="font-bold text-sm">{entry.totalScore.toLocaleString()}</p>
-                {entry.scoreDelta > 0 && <p className="text-xs text-green-600">+{entry.scoreDelta}</p>}
-              </div>
-            </div>
-          )
-        })}
-        {/* Show own rank if not in top 10 */}
-        {myEntry && !myRankInTop10 && (
-          <>
-            <div className="text-center text-muted-foreground text-sm py-1">…</div>
-            <div className="flex items-center gap-3 rounded-xl border border-primary bg-primary/10 ring-2 ring-primary px-4 py-3">
-              <span className="text-lg font-black w-8 text-center text-muted-foreground">#{myEntry.rank}</span>
-              <QuizAvatar emoji={myEntry.avatar} size="xl" />
-              <span className="flex-1 font-semibold truncate text-sm">{myEntry.displayName} (you)</span>
-              <div className="text-right">
-                <p className="font-bold text-sm">{myEntry.totalScore.toLocaleString()}</p>
-                {myEntry.scoreDelta > 0 && <p className="text-xs text-green-600">+{myEntry.scoreDelta}</p>}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-      {!isFinal && <p className="text-sm text-muted-foreground text-center">Waiting for host…</p>}
     </div>
   )
 }

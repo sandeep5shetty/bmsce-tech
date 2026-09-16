@@ -9,6 +9,7 @@ import { ConfirmActionDialog } from "@/features/quiz/components/confirm-action-d
 import { QuizAdminToolbarPortal } from "@/features/quiz/components/quiz-admin-toolbar-portal"
 import { QuizAvatar } from "@/features/quiz/components/quiz-avatar"
 import { QuizFinalLeaderboard } from "@/features/quiz/components/quiz-final-leaderboard"
+import { QuizQuestionLeaderboard } from "@/features/quiz/components/quiz-question-leaderboard"
 import { PresenterBreakPanel } from "@/features/quiz/components/presenter-break-panel"
 import { QuizBrandLogo } from "@/features/quiz/components/quiz-brand-logo"
 import { SessionControlBar } from "@/features/quiz/components/session-control-bar"
@@ -254,7 +255,6 @@ export default function PresentPage() {
           setAnsweredCount(0)
           setWordCloudData([])
           setResultsData(null)
-          setLeaderboardData(null)
         }
       })
       .on("broadcast", { event: "results_revealed" }, ({ payload }) => {
@@ -394,7 +394,6 @@ export default function PresentPage() {
               setQuestionStartedAt(updatedSession.question_started_at ?? null)
               setAnsweredCount(0)
               setResultsData(null)
-              setLeaderboardData(null)
             }
           }
           if (updatedSession.status === "question") {
@@ -835,7 +834,10 @@ export default function PresentPage() {
           <div className="max-w-6xl mx-auto w-full px-6 py-8">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2">
-                <LeaderboardView entries={visibleEntries} isFinal={false} />
+                <QuizQuestionLeaderboard
+                  entries={visibleEntries}
+                  variant="presenter"
+                />
               </div>
               {breakPanel}
             </div>
@@ -1151,33 +1153,6 @@ function ResultsView({
         })}
       </div>
       <p className="text-sm text-muted-foreground text-center">{resultsData.totalResponses} total response{resultsData.totalResponses !== 1 ? "s" : ""}</p>
-    </div>
-  )
-}
-
-function LeaderboardView({ entries, isFinal }: { entries: LeaderboardEntry[]; isFinal: boolean }) {
-  return (
-    <div className="flex-1 max-w-2xl mx-auto w-full px-6 py-8 space-y-6">
-      <h2 className="text-2xl font-bold">{isFinal ? "Final Leaderboard" : "Leaderboard"}</h2>
-      <div className="space-y-2">
-        {entries.map((entry, i) => (
-          <div key={entry.participantId}
-            className="flex items-center gap-4 rounded-xl border bg-card px-4 py-3 transition-all duration-500"
-            style={{ animationDelay: `${i * 50}ms` }}>
-            <span className="text-2xl font-black text-muted-foreground w-8 text-center">
-              {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉" : `#${entry.rank}`}
-            </span>
-            <QuizAvatar emoji={entry.avatar} size="2xl" />
-            <span className="flex-1 font-semibold truncate">{entry.displayName}</span>
-            <div className="text-right">
-              <p className="font-bold">{entry.totalScore.toLocaleString()}</p>
-              {entry.scoreDelta > 0 && (
-                <p className="text-xs text-green-600 font-medium">+{entry.scoreDelta}</p>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }
