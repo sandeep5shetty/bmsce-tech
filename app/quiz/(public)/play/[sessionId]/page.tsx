@@ -666,7 +666,13 @@ export default function PlayPage() {
     return (
       <>
         <QuizFullscreenGuard active={focusEnforcementActive} state={fullscreen} />
-        <EndView displayName={displayName} avatar={avatar} rank={myEntry?.rank ?? null} totalScore={myEntry?.totalScore ?? runningTotal} />
+        <EndView
+          sessionId={sessionId}
+          displayName={displayName}
+          avatar={avatar}
+          rank={myEntry?.rank ?? null}
+          totalScore={myEntry?.totalScore ?? runningTotal}
+        />
       </>
     )
   }
@@ -1007,8 +1013,13 @@ function ResultFeedbackView({
 }
 
 function EndView({
-  displayName, avatar, rank, totalScore,
+  sessionId,
+  displayName,
+  avatar,
+  rank,
+  totalScore,
 }: {
+  sessionId: string
   displayName: string
   avatar: string
   rank: number | null
@@ -1035,9 +1046,18 @@ function EndView({
           <p className="text-3xl font-bold">{totalScore.toLocaleString()}</p>
         </div>
       </div>
-      <Link href="/quiz/join" className="rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground hover:bg-primary/90 transition">
-        Play Again
-      </Link>
+      <div className="flex flex-col items-stretch gap-3 w-full max-w-xs">
+        <Link
+          href={`/quiz/play/${sessionId}/report`}
+          className="rounded-xl bg-primary px-6 py-3 text-center text-sm font-bold text-primary-foreground hover:bg-primary/90 transition"
+        >
+          View & Download your Report
+        </Link>
+        <Link href="/quiz/join" className="
+        rounded-xl border border-primary bg-primary/10 px-6 py-3 text-center text-sm font-bold text-primary hover:bg-primary/15 transition">
+          Play Again
+        </Link>
+      </div>
     </div>
   )
 }

@@ -1630,7 +1630,12 @@ export async function getQuizAnalytics(sessionId: string) {
     );
   }
 
-  const [snapshots, participants, answers] = await Promise.all([
+  const { listSessionReportFeedbackForAdmin } = await import(
+    "./report-feedback"
+  );
+
+  const [snapshots, participants, answers, reportFeedback] =
+    await Promise.all([
     db.query.quizAnalyticsSnapshot.findMany({
       where: eq(quizAnalyticsSnapshot.sessionId, sessionId),
       with: {
@@ -1670,6 +1675,7 @@ export async function getQuizAnalytics(sessionId: string) {
         responseTimeMs: true,
       },
     }),
+    listSessionReportFeedbackForAdmin(sessionId),
   ]);
 
   const correctCountByParticipant = new Map<string, number>();
@@ -1717,6 +1723,7 @@ export async function getQuizAnalytics(sessionId: string) {
           : undefined,
       }),
     ),
+    report_feedback: reportFeedback,
   };
 }
 
@@ -1739,6 +1746,11 @@ export async function deleteQuizAnalyticsSession(sessionId: string) {
       403,
     );
   }
+
+  const { deleteQuizReportPdfsForSession } = await import(
+    "./participant-report-pdf-cleanup"
+  );
+  await deleteQuizReportPdfsForSession(sessionId);
 
   await db.delete(quizSession).where(eq(quizSession.id, sessionId));
 }

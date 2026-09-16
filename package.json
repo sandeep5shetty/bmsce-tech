@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "db:migrate": "drizzle-kit migrate",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -14,7 +15,9 @@
     "format:check": "prettier --check .",
     "seed:students": "npx tsx scripts/seed-section-b-students.ts",
     "seed:roster": "npx tsx scripts/seed-student-roster.ts",
-    "test:seat-reservation": "npx tsx scripts/test-concurrent-seat-reservation.ts"
+    "test:seat-reservation": "npx tsx scripts/test-concurrent-seat-reservation.ts",
+    "test:participant-report": "npx tsx scripts/test-participant-report-logic.ts",
+    "test:participant-report-pdf": "npx tsx scripts/test-participant-report-pdf-logic.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1065.0",
@@ -37,6 +40,7 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@react-pdf/renderer": "^4.9.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
     "@tabler/icons-react": "^3.35.0",

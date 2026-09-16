@@ -10,6 +10,10 @@ import { LoadingScreen } from "@/components/ui/loading-screen"
 import { Spinner } from "@/components/ui/spinner"
 import { ConfirmActionDialog } from "@/features/quiz/components/confirm-action-dialog"
 import {
+  SessionReportFeedbackPanel,
+  type SessionReportFeedbackEntry,
+} from "@/features/quiz/components/session-report-feedback-panel"
+import {
   SessionAnalytics,
   type AnalyticsAnswer,
   type AnalyticsParticipant,
@@ -22,6 +26,7 @@ interface AnalyticsData {
   participants?: AnalyticsParticipant[]
   answers?: AnalyticsAnswer[]
   snapshots: AnalyticsSnapshot[]
+  report_feedback?: SessionReportFeedbackEntry[]
 }
 
 /**
@@ -170,6 +175,10 @@ export default function AnalyticsPage() {
             </Button>
           </div>
         </div>
+
+        <SessionReportFeedbackPanel
+          feedback={data?.report_feedback ?? []}
+        />
 
         {snapshots.length === 0 ? (
           <Card>

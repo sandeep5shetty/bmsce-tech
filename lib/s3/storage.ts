@@ -167,6 +167,74 @@ export function buildQuizUploadKey(extension: string): string {
   return `profiles/quiz/uploads/${crypto.randomUUID()}.${ext}`;
 }
 
+const QUIZ_REPORT_PREFIX = "profiles/quiz/reports/";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function buildQuizParticipantReportKey(
+  sessionId: string,
+  participantId: string,
+): string {
+  if (!UUID_RE.test(sessionId) || !UUID_RE.test(participantId)) {
+    throw new Error("Invalid session or participant id for report key.");
+  }
+  return `${QUIZ_REPORT_PREFIX}${sessionId}/${participantId}.pdf`;
+}
+
+export function isQuizParticipantReportKey(key: string): boolean {
+  if (!key.startsWith(QUIZ_REPORT_PREFIX)) return false;
+  const rest = key.slice(QUIZ_REPORT_PREFIX.length);
+  const match = rest.match(
+    /^([0-9a-f-]{36})\/([0-9a-f-]{36})\.pdf$/i,
+  );
+  if (!match) return false;
+  return UUID_RE.test(match[1]) && UUID_RE.test(match[2]);
+}
+
+export async function uploadPrivateDocumentBuffer(params: {
+  key: string;
+  body: Buffer;
+  contentType: string;
+  maxBytes?: number;
+}): Promise<string> {
+  const maxBytes = params.maxBytes ?? DEFAULT_MAX_DOCUMENT_BYTES;
+  if (params.body.byteLength > maxBytes) {
+    throw new Error("Document exceeds size limit");
+  }
+
+  if (!isQuizParticipantReportKey(params.key)) {
+    throw new Error("Refusing to upload private document outside report prefix.");
+  }
+
+  const { bucket } = getS3Config();
+  const client = getS3Client();
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: params.key,
+      Body: params.body,
+      ContentType: params.contentType,
+      CacheControl: "private, no-store",
+    }),
+  );
+
+  return params.key;
+}
+
+export async function deleteS3ObjectByKey(key: string): Promise<void> {
+  const { bucket } = getS3Config();
+  const client = getS3Client();
+
+  await client.send(
+    new DeleteObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    }),
+  );
+}
+
 const DEFAULT_MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
 
 /** Document types accepted for placement-experience JDs and extra resources. */

@@ -241,3 +241,38 @@ export function validateDisplayName(name: string): boolean {
   if (name.length < 1 || name.length > 30) return false;
   return displayNamePattern.test(name);
 }
+
+export const participantReportAiFeedbackSchema = z.object({
+  summary: z.string().trim().min(1).max(600),
+  strengths: z.array(z.string().trim().min(1).max(200)).min(1).max(4),
+  improvement_areas: z.array(z.string().trim().min(1).max(200)).min(1).max(4),
+  prioritized_actions: z.array(z.string().trim().min(1).max(220)).min(1).max(5),
+});
+
+export type ParticipantReportAiFeedback = z.infer<
+  typeof participantReportAiFeedbackSchema
+>;
+
+export const submitReportFeedbackSchema = z
+  .object({
+    display_name: z.string().trim().max(30).optional(),
+    is_anonymous: z.boolean(),
+    rating: z.number().int().min(1).max(5),
+    feedback_text: z.string().trim().min(1).max(1000),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      !data.is_anonymous &&
+      (!data.display_name || data.display_name.trim().length === 0)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Name is required unless you submit anonymously.",
+        path: ["display_name"],
+      });
+    }
+  });
+
+export type SubmitReportFeedbackInput = z.infer<
+  typeof submitReportFeedbackSchema
+>;

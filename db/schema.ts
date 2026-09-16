@@ -621,6 +621,61 @@ export const quizAnalyticsSnapshot = pgTable(
   ],
 );
 
+// Cached AI feedback for one participant report (deterministic data is computed on read)
+export const quizParticipantReport = pgTable(
+  "quiz_participant_report",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => quizSession.id, { onDelete: "cascade" }),
+    participantId: text("participant_id")
+      .notNull()
+      .references(() => quizSessionParticipant.id, { onDelete: "cascade" }),
+    aiStatus: text("ai_status").notNull().default("idle"),
+    aiFeedback: jsonb("ai_feedback"),
+    aiError: text("ai_error"),
+    pdfStatus: text("pdf_status").notNull().default("idle"),
+    pdfS3Key: text("pdf_s3_key"),
+    pdfContentHash: text("pdf_content_hash"),
+    pdfError: text("pdf_error"),
+    pdfGeneratedAt: timestamp("pdf_generated_at", { mode: "date" }),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("quiz_participant_reports_participant").on(t.participantId),
+  ],
+);
+
+export const quizSessionReportFeedback = pgTable(
+  "quiz_session_report_feedback",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => quizSession.id, { onDelete: "cascade" }),
+    participantId: text("participant_id")
+      .notNull()
+      .references(() => quizSessionParticipant.id, { onDelete: "cascade" }),
+    displayName: text("display_name").notNull(),
+    isAnonymous: boolean("is_anonymous").notNull().default(false),
+    rating: integer("rating").notNull(),
+    feedbackText: text("feedback_text").notNull(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("quiz_session_report_feedback_participant").on(
+      t.sessionId,
+      t.participantId,
+    ),
+  ],
+);
+
 // Quiz Join Code History Table
 export const quizJoinCodeHistory = pgTable("quiz_join_code_history", {
   id: text("id")
@@ -1147,6 +1202,8 @@ export const quizSessionRelations = relations(quizSession, ({ one, many }) => ({
   participants: many(quizSessionParticipant),
   answers: many(quizParticipantAnswer),
   analyticsSnapshots: many(quizAnalyticsSnapshot),
+  participantReports: many(quizParticipantReport),
+  reportFeedback: many(quizSessionReportFeedback),
 }));
 
 export const quizSessionParticipantRelations = relations(
@@ -1157,6 +1214,35 @@ export const quizSessionParticipantRelations = relations(
       references: [quizSession.id],
     }),
     answers: many(quizParticipantAnswer),
+    report: one(quizParticipantReport),
+  }),
+);
+
+export const quizParticipantReportRelations = relations(
+  quizParticipantReport,
+  ({ one }) => ({
+    session: one(quizSession, {
+      fields: [quizParticipantReport.sessionId],
+      references: [quizSession.id],
+    }),
+    participant: one(quizSessionParticipant, {
+      fields: [quizParticipantReport.participantId],
+      references: [quizSessionParticipant.id],
+    }),
+  }),
+);
+
+export const quizSessionReportFeedbackRelations = relations(
+  quizSessionReportFeedback,
+  ({ one }) => ({
+    session: one(quizSession, {
+      fields: [quizSessionReportFeedback.sessionId],
+      references: [quizSession.id],
+    }),
+    participant: one(quizSessionParticipant, {
+      fields: [quizSessionReportFeedback.participantId],
+      references: [quizSessionParticipant.id],
+    }),
   }),
 );
 
