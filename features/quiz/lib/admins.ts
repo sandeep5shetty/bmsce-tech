@@ -7,6 +7,7 @@ export const QUIZ_ADMIN_EMAILS = [
   "tanishg.mca25@bmsce.ac.in",
   "tarunp.mca25@bmsce.ac.in",
   "tejdeepbn.mca25@bmsce.ac.in",
+  "shrilaxmi.mca25@bmsce.ac.in"
 ] as const;
 
 const quizAdminEmailSet = new Set<string>(
