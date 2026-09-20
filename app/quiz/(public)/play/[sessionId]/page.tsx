@@ -12,6 +12,7 @@ import { QuizEventBrand } from "@/features/quiz/components/quiz-brand-logo"
 import { QuizFinalLeaderboard } from "@/features/quiz/components/quiz-final-leaderboard"
 import { QuizQuestionLeaderboard } from "@/features/quiz/components/quiz-question-leaderboard"
 import { useQuizFullscreen } from "@/features/quiz/hooks/use-quiz-fullscreen"
+import { useWakeLock } from "@/features/quiz/hooks/use-wake-lock"
 import { DEFAULT_QUIZ_AVATAR } from "@/features/quiz/lib/quiz-avatars"
 import {
   clearQuizParticipantCredentials,
@@ -430,6 +431,7 @@ export default function PlayPage() {
 
   const focusEnforcementActive = quizActive && enforceFocusMode
   const fullscreen = useQuizFullscreen(focusEnforcementActive)
+  useWakeLock(quizActive)
 
   const removedCalledRef = useRef(false)
   useEffect(() => {
