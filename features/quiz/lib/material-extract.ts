@@ -8,17 +8,27 @@ import type { QuizMaterialFileType } from "@/lib/s3/storage";
 
 import type { ExtractedSegment } from "./material-chunk";
 
-let pdfWorkerReady = false;
+let pdfEnvReady = false;
 
 /**
- * pdf-parse v2 uses pdfjs-dist, which loads a separate worker script. Next.js
- * bundles the main module into .next/server/chunks, so the default relative
- * ./pdf.worker.mjs path does not exist unless we point at node_modules.
+ * pdf-parse v2 wraps pdfjs-dist, which expects browser APIs (e.g. DOMMatrix).
+ * On serverless Node, import `pdf-parse/worker` first so @napi-rs/canvas can
+ * polyfill globals, then point pdfjs at the worker file in node_modules (Next
+ * does not ship pdf.worker.mjs next to bundled chunks).
  */
-async function ensurePdfWorker(): Promise<void> {
-  if (pdfWorkerReady) return;
+async function ensurePdfEnvironment(): Promise<typeof import("pdf-parse")> {
+  if (pdfEnvReady) {
+    return import("pdf-parse");
+  }
 
-  const { PDFParse } = await import("pdf-parse");
+  await import("pdf-parse/worker");
+
+  if (typeof globalThis.DOMMatrix === "undefined") {
+    const canvas = await import("@napi-rs/canvas");
+    globalThis.DOMMatrix = canvas.DOMMatrix as typeof globalThis.DOMMatrix;
+  }
+
+  const pdfParse = await import("pdf-parse");
   const workerPath = path.join(
     process.cwd(),
     "node_modules",
@@ -27,13 +37,13 @@ async function ensurePdfWorker(): Promise<void> {
     "build",
     "pdf.worker.mjs",
   );
-  PDFParse.setWorker(pathToFileURL(workerPath).href);
-  pdfWorkerReady = true;
+  pdfParse.PDFParse.setWorker(pathToFileURL(workerPath).href);
+  pdfEnvReady = true;
+  return pdfParse;
 }
 
 async function extractPdf(buffer: Buffer): Promise<ExtractedSegment[]> {
-  await ensurePdfWorker();
-  const { PDFParse } = await import("pdf-parse");
+  const { PDFParse } = await ensurePdfEnvironment();
   const parser = new PDFParse({ data: buffer });
   try {
     const result = await parser.getText();
