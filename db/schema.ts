@@ -650,6 +650,82 @@ export const quizParticipantReport = pgTable(
   ],
 );
 
+export const quizEventMaterial = pgTable("quiz_event_material", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  eventId: text("event_id")
+    .notNull()
+    .references(() => quizEvent.id, { onDelete: "cascade" }),
+  adminId: text("admin_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  fileName: text("file_name").notNull(),
+  contentType: text("content_type").notNull(),
+  s3Key: text("s3_key").notNull(),
+  status: text("status").notNull().default("pending"),
+  error: text("error"),
+  chunkCount: integer("chunk_count").notNull().default(0),
+  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { mode: "date" })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+export const quizEventMaterialChunk = pgTable(
+  "quiz_event_material_chunk",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    materialId: text("material_id")
+      .notNull()
+      .references(() => quizEventMaterial.id, { onDelete: "cascade" }),
+    eventId: text("event_id")
+      .notNull()
+      .references(() => quizEvent.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunk_index").notNull(),
+    pageNumber: integer("page_number"),
+    slideNumber: integer("slide_number"),
+    text: text("text").notNull(),
+    embedding: jsonb("embedding").$type<number[]>(),
+    tokenCount: integer("token_count"),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("quiz_event_material_chunk_material_index").on(
+      t.materialId,
+      t.chunkIndex,
+    ),
+    index("quiz_event_material_chunk_event_idx").on(t.eventId),
+  ],
+);
+
+export const quizQuestionSourceCitation = pgTable(
+  "quiz_question_source_citation",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    questionId: text("question_id")
+      .notNull()
+      .references(() => quizQuestion.id, { onDelete: "cascade" }),
+    materialId: text("material_id")
+      .notNull()
+      .references(() => quizEventMaterial.id, { onDelete: "cascade" }),
+    fileName: text("file_name").notNull(),
+    pageNumber: integer("page_number"),
+    slideNumber: integer("slide_number"),
+    excerpt: text("excerpt").notNull(),
+    chunkId: text("chunk_id").references(() => quizEventMaterialChunk.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("quiz_question_source_citation_question_idx").on(t.questionId)],
+);
+
 export const quizSessionReportFeedback = pgTable(
   "quiz_session_report_feedback",
   {
@@ -1160,6 +1236,7 @@ export const quizEventRelations = relations(quizEvent, ({ one, many }) => ({
   questions: many(quizQuestion),
   sessions: many(quizSession),
   joinCodeHistory: many(quizJoinCodeHistory),
+  materials: many(quizEventMaterial),
 }));
 
 export const quizQuestionRelations = relations(
@@ -1173,6 +1250,54 @@ export const quizQuestionRelations = relations(
     participantAnswers: many(quizParticipantAnswer),
     analyticsSnapshots: many(quizAnalyticsSnapshot),
     currentSessions: many(quizSession),
+    sourceCitations: many(quizQuestionSourceCitation),
+  }),
+);
+
+export const quizEventMaterialRelations = relations(
+  quizEventMaterial,
+  ({ one, many }) => ({
+    event: one(quizEvent, {
+      fields: [quizEventMaterial.eventId],
+      references: [quizEvent.id],
+    }),
+    admin: one(user, {
+      fields: [quizEventMaterial.adminId],
+      references: [user.id],
+    }),
+    chunks: many(quizEventMaterialChunk),
+  }),
+);
+
+export const quizEventMaterialChunkRelations = relations(
+  quizEventMaterialChunk,
+  ({ one }) => ({
+    material: one(quizEventMaterial, {
+      fields: [quizEventMaterialChunk.materialId],
+      references: [quizEventMaterial.id],
+    }),
+    event: one(quizEvent, {
+      fields: [quizEventMaterialChunk.eventId],
+      references: [quizEvent.id],
+    }),
+  }),
+);
+
+export const quizQuestionSourceCitationRelations = relations(
+  quizQuestionSourceCitation,
+  ({ one }) => ({
+    question: one(quizQuestion, {
+      fields: [quizQuestionSourceCitation.questionId],
+      references: [quizQuestion.id],
+    }),
+    material: one(quizEventMaterial, {
+      fields: [quizQuestionSourceCitation.materialId],
+      references: [quizEventMaterial.id],
+    }),
+    chunk: one(quizEventMaterialChunk, {
+      fields: [quizQuestionSourceCitation.chunkId],
+      references: [quizEventMaterialChunk.id],
+    }),
   }),
 );
 

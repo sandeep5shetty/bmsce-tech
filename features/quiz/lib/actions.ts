@@ -21,6 +21,7 @@ import {
   quizJoinCodeHistory,
   quizParticipantAnswer,
   quizQuestion,
+  quizQuestionSourceCitation,
   quizSession,
   quizSessionParticipant,
 } from "@/db/schema";
@@ -48,6 +49,7 @@ import type {
   CreateQuestionInput,
   CreateSessionInput,
   GenerateQuestionsInput,
+  QuestionSourceCitationInput,
   JoinSessionInput,
   PublishEventInput,
   SubmitAnswerInput,
@@ -487,8 +489,35 @@ export async function generateQuizQuestionsWithAi(
   }
 
   try {
+    if (input.use_materials) {
+      const { retrieveMaterialChunksForTopic } = await import(
+        "./material-retrieval"
+      );
+      const { generateGroundedQuestionsWithAi } = await import(
+        "./ai-generate-grounded"
+      );
+      const chunks = await retrieveMaterialChunksForTopic({
+        eventId,
+        topic: input.topic,
+        materialIds: input.material_ids,
+        limit: Math.min(48, Math.max(16, input.count * 3)),
+      });
+      const questions = await generateGroundedQuestionsWithAi(input, chunks);
+      return {
+        questions,
+        grounded: true as const,
+        requested_count: input.count,
+        partial: questions.length < input.count,
+      };
+    }
+
     const questions = await generateQuestionsWithAi(input);
-    return { questions };
+    return {
+      questions,
+      grounded: false as const,
+      requested_count: input.count,
+      partial: questions.length < input.count,
+    };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to generate questions.";
@@ -496,9 +525,13 @@ export async function generateQuizQuestionsWithAi(
   }
 }
 
+type BulkQuestionInput = CreateQuestionInput & {
+  source_citations?: QuestionSourceCitationInput[];
+};
+
 export async function bulkCreateQuizQuestions(
   eventId: string,
-  questions: CreateQuestionInput[],
+  questions: BulkQuestionInput[],
 ) {
   const admin = await requireAdmin();
   const event = await getOwnedEvent(admin.id, eventId);
@@ -516,11 +549,27 @@ export async function bulkCreateQuizQuestions(
   const created = [];
   try {
     for (const data of questions) {
+      const { source_citations, ...questionData } = data;
       const { question, answerOptions } = await insertQuestionWithOptions(
         eventId,
-        data,
+        questionData,
         nextPosition++,
       );
+
+      if (source_citations?.length) {
+        await db.insert(quizQuestionSourceCitation).values(
+          source_citations.map((citation) => ({
+            questionId: question.id,
+            materialId: citation.material_id,
+            fileName: citation.file_name,
+            pageNumber: citation.page_number ?? null,
+            slideNumber: citation.slide_number ?? null,
+            excerpt: citation.excerpt,
+            chunkId: citation.chunk_id ?? null,
+          })),
+        );
+      }
+
       created.push({
         question: serializeQuizQuestion(question),
         answer_options: answerOptions.map(serializeQuizAnswerOption),

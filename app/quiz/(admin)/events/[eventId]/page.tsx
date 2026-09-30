@@ -10,6 +10,7 @@ import { BulkTimeLimitEditor } from "@/features/quiz/components/bulk-time-limit-
 import { EventAnalyticsPanel } from "@/features/quiz/components/event-analytics-panel";
 import { PastSessions } from "@/features/quiz/components/past-sessions";
 import { AiQuestionGenerator } from "@/features/quiz/components/ai-question-generator";
+import { QuizMaterialsDialog } from "@/features/quiz/components/quiz-materials-dialog";
 import { JsonQuestionImporter } from "@/features/quiz/components/json-question-importer";
 import { PublishPanel } from "@/features/quiz/components/publish-panel";
 import { QuestionList } from "@/features/quiz/components/question-list";
@@ -109,6 +110,7 @@ export default async function QuizEventPage({ params }: PageProps) {
                 Analytics
               </Link>
             </Button>
+            <QuizMaterialsDialog eventId={eventId} />
             <Button
               variant="secondary"
               size="sm"

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { Check, Loader2, Sparkles } from "lucide-react";
+import { BookOpen, Check, Loader2, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -28,7 +28,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
+import type { QuizMaterialSummary } from "@/features/quiz/components/quiz-materials-panel";
 import type { AiGeneratedQuestion } from "@/features/quiz/lib/validation";
+import { cn } from "@/lib/utils";
 
 interface AiQuestionGeneratorProps {
   eventId: string;
@@ -56,6 +58,22 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
 
   const [generated, setGenerated] = useState<AiGeneratedQuestion[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [useMaterials, setUseMaterials] = useState(false);
+  const [materials, setMaterials] = useState<QuizMaterialSummary[]>([]);
+  const [materialIds, setMaterialIds] = useState<Set<string>>(new Set());
+
+  const loadMaterials = useCallback(async () => {
+    const res = await fetch(`/api/quiz/v1/events/${eventId}/materials`);
+    if (!res.ok) return;
+    const data = (await res.json()) as { materials?: QuizMaterialSummary[] };
+    const ready = (data.materials ?? []).filter((m) => m.status === "ready");
+    setMaterials(ready);
+    setMaterialIds(new Set(ready.map((m) => m.id)));
+  }, [eventId]);
+
+  useEffect(() => {
+    if (open) void loadMaterials();
+  }, [open, loadMaterials]);
 
   function resetState() {
     setStep("form");
@@ -79,6 +97,11 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
       return;
     }
 
+    if (useMaterials && materialIds.size === 0) {
+      toast.error("Select at least one indexed material or turn off grounded mode.");
+      return;
+    }
+
     setGenerating(true);
     try {
       const res = await fetch(
@@ -93,6 +116,8 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
             question_type: questionType,
             time_limit: timeLimit,
             additional_context: additionalContext.trim() || undefined,
+            use_materials: useMaterials,
+            material_ids: useMaterials ? [...materialIds] : undefined,
           }),
         },
       );
@@ -104,10 +129,22 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
       }
 
       const questions = (data.questions ?? []) as AiGeneratedQuestion[];
+      const requested =
+        typeof data.requested_count === "number" ? data.requested_count : count;
+      const partial = data.partial === true || questions.length < requested;
+
       setGenerated(questions);
       setSelected(new Set(questions.map((_, idx) => idx)));
       setStep("preview");
-      toast.success(`Generated ${questions.length} questions`);
+      if (partial && useMaterials) {
+        toast.success(
+          `Generated ${questions.length} of ${requested} questions from your materials.`,
+        );
+      } else if (partial) {
+        toast.success(`Generated ${questions.length} of ${requested} questions.`);
+      } else {
+        toast.success(`Generated ${questions.length} questions`);
+      }
     } catch {
       toast.error("Network error. Please try again.");
     } finally {
@@ -142,6 +179,14 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
             text: opt.text,
             is_correct: opt.is_correct,
             position: idx + 1,
+          })),
+          source_citations: q.citations?.map((c) => ({
+            material_id: c.material_id,
+            chunk_id: c.chunk_id,
+            file_name: c.file_name,
+            page_number: c.page_number,
+            slide_number: c.slide_number,
+            excerpt: c.excerpt,
           })),
         })),
       };
@@ -180,7 +225,7 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="font-serif">Generate Questions with AI</DialogTitle>
           <DialogDescription>
@@ -190,7 +235,10 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
         </DialogHeader>
 
         {step === "form" ? (
-          <form onSubmit={handleGenerate} className="space-y-4">
+          <form
+            onSubmit={handleGenerate}
+            className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5"
+          >
             <div className="space-y-2">
               <Label htmlFor="ai-topic">Topic</Label>
               <Input
@@ -268,6 +316,72 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
               </div>
             </div>
 
+            <div className="rounded-lg border p-3 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Use uploaded materials</p>
+                  <p className="text-muted-foreground text-xs">
+                    Ground questions in your course files with citations.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={useMaterials}
+                  onClick={() => setUseMaterials(!useMaterials)}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+                    useMaterials ? "bg-primary" : "bg-input",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform",
+                      useMaterials ? "translate-x-6" : "translate-x-1",
+                    )}
+                  />
+                </button>
+              </div>
+              {useMaterials && (
+                <div className="space-y-2">
+                  {materials.length === 0 ? (
+                    <p className="text-muted-foreground text-xs">
+                      No indexed materials yet. Use the Materials button on this
+                      event to upload files first.
+                    </p>
+                  ) : (
+                    <ul className="max-h-32 space-y-1 overflow-y-auto">
+                      {materials.map((material) => {
+                        const checked = materialIds.has(material.id);
+                        return (
+                          <li key={material.id}>
+                            <label className="flex cursor-pointer items-center gap-2 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  setMaterialIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(material.id)) {
+                                      next.delete(material.id);
+                                    } else {
+                                      next.add(material.id);
+                                    }
+                                    return next;
+                                  });
+                                }}
+                              />
+                              <span className="truncate">{material.file_name}</span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="ai-context">Additional context (optional)</Label>
               <Textarea
@@ -304,10 +418,17 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
             </div>
           </form>
         ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-2">
+          <div className="flex min-h-0 flex-1 flex-col gap-4">
+            <div className="flex shrink-0 items-center justify-between gap-2">
               <p className="text-muted-foreground text-sm">
                 {selected.size} of {generated.length} selected
+                {generated.length < count && (
+                  <span className="text-muted-foreground/80">
+                    {" "}
+                    (asked for {count}
+                    {useMaterials ? " from materials" : ""})
+                  </span>
+                )}
               </p>
               <Button
                 type="button"
@@ -319,15 +440,18 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
               </Button>
             </div>
 
-            <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-1 py-1">
               {generated.map((question, index) => {
                 const isSelected = selected.has(index);
                 return (
                   <Card
                     key={index}
-                    className={`cursor-pointer transition ${
-                      isSelected ? "ring-primary ring-2" : "opacity-80"
-                    }`}
+                    className={cn(
+                      "cursor-pointer shadow-sm transition-all",
+                      isSelected
+                        ? "border-primary border-2 bg-card"
+                        : "border-border border opacity-90 hover:opacity-100",
+                    )}
                     onClick={() => toggleSelected(index)}
                   >
                     <CardContent className="space-y-3 p-4">
@@ -358,6 +482,31 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
                             </Badge>
                           </div>
                           <p className="text-sm font-medium">{question.text}</p>
+                          {question.citations && question.citations.length > 0 && (
+                            <div className="space-y-1 rounded-md border bg-muted/30 p-2">
+                              <p className="flex items-center gap-1 text-xs font-medium">
+                                <BookOpen className="h-3 w-3" />
+                                Sources
+                              </p>
+                              {question.citations.map((citation, citIdx) => (
+                                <p
+                                  key={citIdx}
+                                  className="text-muted-foreground text-xs leading-relaxed"
+                                >
+                                  <span className="font-medium text-foreground">
+                                    {citation.file_name}
+                                  </span>
+                                  {citation.page_number != null
+                                    ? ` · p. ${citation.page_number}`
+                                    : citation.slide_number != null
+                                      ? ` · slide ${citation.slide_number}`
+                                      : ""}
+                                  {" — "}
+                                  {citation.excerpt}
+                                </p>
+                              ))}
+                            </div>
+                          )}
                           <ul className="space-y-1">
                             {question.answer_options.map((opt, optIdx) => (
                               <li
@@ -381,7 +530,7 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
               })}
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex shrink-0 justify-end gap-2 border-t pt-4">
               <Button
                 type="button"
                 variant="ghost"

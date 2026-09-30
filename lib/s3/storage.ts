@@ -168,9 +168,73 @@ export function buildQuizUploadKey(extension: string): string {
 }
 
 const QUIZ_REPORT_PREFIX = "profiles/quiz/reports/";
+const QUIZ_EVENT_MATERIAL_PREFIX = "profiles/quiz/events/";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type QuizMaterialFileType = "pdf" | "docx" | "pptx";
+
+export const QUIZ_MATERIAL_CONTENT_TYPES: Record<QuizMaterialFileType, string> =
+  {
+    pdf: "application/pdf",
+    docx:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    pptx:
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  };
+
+export function buildQuizEventMaterialKey(
+  eventId: string,
+  materialId: string,
+  extension: QuizMaterialFileType,
+): string {
+  if (!UUID_RE.test(eventId) || !UUID_RE.test(materialId)) {
+    throw new Error("Invalid event or material id for material key.");
+  }
+  return `${QUIZ_EVENT_MATERIAL_PREFIX}${eventId}/materials/${materialId}.${extension}`;
+}
+
+export function isQuizEventMaterialKey(key: string): boolean {
+  if (!key.startsWith(QUIZ_EVENT_MATERIAL_PREFIX)) return false;
+  const rest = key.slice(QUIZ_EVENT_MATERIAL_PREFIX.length);
+  return /^[0-9a-f-]{36}\/materials\/[0-9a-f-]{36}\.(pdf|docx|pptx)$/i.test(
+    rest,
+  );
+}
+
+const DEFAULT_MAX_QUIZ_MATERIAL_BYTES = 25 * 1024 * 1024;
+
+export async function uploadQuizMaterialBuffer(params: {
+  key: string;
+  body: Buffer;
+  contentType: string;
+  maxBytes?: number;
+}): Promise<string> {
+  const maxBytes = params.maxBytes ?? DEFAULT_MAX_QUIZ_MATERIAL_BYTES;
+  if (params.body.byteLength > maxBytes) {
+    throw new Error("Document exceeds size limit");
+  }
+
+  if (!isQuizEventMaterialKey(params.key)) {
+    throw new Error("Refusing to upload quiz material outside allowed prefix.");
+  }
+
+  const { bucket } = getS3Config();
+  const client = getS3Client();
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: params.key,
+      Body: params.body,
+      ContentType: params.contentType,
+      CacheControl: "private, no-store",
+    }),
+  );
+
+  return params.key;
+}
 
 export function buildQuizParticipantReportKey(
   sessionId: string,

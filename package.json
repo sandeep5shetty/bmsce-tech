@@ -17,7 +17,8 @@
     "seed:roster": "npx tsx scripts/seed-student-roster.ts",
     "test:seat-reservation": "npx tsx scripts/test-concurrent-seat-reservation.ts",
     "test:participant-report": "npx tsx scripts/test-participant-report-logic.ts",
-    "test:participant-report-pdf": "npx tsx scripts/test-participant-report-pdf-logic.ts"
+    "test:participant-report-pdf": "npx tsx scripts/test-participant-report-pdf-logic.ts",
+    "test:quiz-rag": "npx tsx scripts/test-quiz-rag-logic.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1065.0",
@@ -67,10 +68,13 @@
     "cmdk": "^1.1.1",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.44.7",
+    "jszip": "^3.10.2",
     "lucide-react": "^0.548.0",
+    "mammoth": "^1.13.0",
     "motion": "^12.23.25",
     "next": "16.0.7",
     "next-themes": "^0.4.6",
+    "pdf-parse": "^2.4.5",
     "qrcode": "^1.5.4",
     "react": "19.2.1",
     "react-dom": "19.2.1",

@@ -202,6 +202,17 @@ export const generateQuestionsSchema = z.object({
   question_type: z.enum(["single_select", "multi_select"]).default("single_select"),
   time_limit: z.number().int().min(5).max(120).default(20),
   additional_context: z.string().max(500).optional(),
+  use_materials: z.boolean().optional(),
+  material_ids: z.array(z.string().min(1)).max(20).optional(),
+});
+
+export const aiGeneratedCitationSchema = z.object({
+  material_id: z.string().min(1),
+  chunk_id: z.string().min(1).optional(),
+  file_name: z.string().trim().min(1).max(200),
+  page_number: z.number().int().positive().optional(),
+  slide_number: z.number().int().positive().optional(),
+  excerpt: z.string().trim().min(1).max(500),
 });
 
 export const aiGeneratedQuestionSchema = z.object({
@@ -216,6 +227,16 @@ export const aiGeneratedQuestionSchema = z.object({
       }),
     )
     .length(4),
+  citations: z.array(aiGeneratedCitationSchema).min(1).optional(),
+});
+
+export const questionSourceCitationInputSchema = z.object({
+  material_id: z.string().min(1),
+  chunk_id: z.string().min(1).optional(),
+  file_name: z.string().trim().min(1).max(200),
+  page_number: z.number().int().positive().optional(),
+  slide_number: z.number().int().positive().optional(),
+  excerpt: z.string().trim().min(1).max(500),
 });
 
 export const aiGeneratedQuestionsResponseSchema = z.object({
@@ -223,7 +244,18 @@ export const aiGeneratedQuestionsResponseSchema = z.object({
 });
 
 export const bulkCreateQuestionsSchema = z.object({
-  questions: z.array(createQuestionSchema).min(1).max(50),
+  questions: z
+    .array(
+      createQuestionSchema.and(
+        z.object({
+          source_citations: z
+            .array(questionSourceCitationInputSchema)
+            .optional(),
+        }),
+      ),
+    )
+    .min(1)
+    .max(50),
 });
 
 export const bulkUpdateTimeLimitsSchema = z.object({
@@ -232,6 +264,10 @@ export const bulkUpdateTimeLimitsSchema = z.object({
 
 export type GenerateQuestionsInput = z.infer<typeof generateQuestionsSchema>;
 export type AiGeneratedQuestion = z.infer<typeof aiGeneratedQuestionSchema>;
+export type AiGeneratedCitation = z.infer<typeof aiGeneratedCitationSchema>;
+export type QuestionSourceCitationInput = z.infer<
+  typeof questionSourceCitationInputSchema
+>;
 export type BulkCreateQuestionsInput = z.infer<typeof bulkCreateQuestionsSchema>;
 export type BulkUpdateTimeLimitsInput = z.infer<typeof bulkUpdateTimeLimitsSchema>;
 
