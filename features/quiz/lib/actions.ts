@@ -500,7 +500,7 @@ export async function generateQuizQuestionsWithAi(
         eventId,
         topic: input.topic,
         materialIds: input.material_ids,
-        limit: Math.min(48, Math.max(16, input.count * 3)),
+        limit: Math.min(96, Math.max(24, input.count * 4)),
       });
       const questions = await generateGroundedQuestionsWithAi(input, chunks);
       return {
@@ -508,6 +508,7 @@ export async function generateQuizQuestionsWithAi(
         grounded: true as const,
         requested_count: input.count,
         partial: questions.length < input.count,
+        source_chunks: chunks.length,
       };
     }
 

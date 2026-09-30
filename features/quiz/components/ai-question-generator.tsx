@@ -61,6 +61,7 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
   const [useMaterials, setUseMaterials] = useState(false);
   const [materials, setMaterials] = useState<QuizMaterialSummary[]>([]);
   const [materialIds, setMaterialIds] = useState<Set<string>>(new Set());
+  const [lastSourceChunks, setLastSourceChunks] = useState<number | null>(null);
 
   const loadMaterials = useCallback(async () => {
     const res = await fetch(`/api/quiz/v1/events/${eventId}/materials`);
@@ -133,12 +134,22 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
         typeof data.requested_count === "number" ? data.requested_count : count;
       const partial = data.partial === true || questions.length < requested;
 
+      const sourceChunks =
+        typeof data.source_chunks === "number" ? data.source_chunks : null;
+      setLastSourceChunks(sourceChunks);
+
       setGenerated(questions);
       setSelected(new Set(questions.map((_, idx) => idx)));
       setStep("preview");
       if (partial && useMaterials) {
-        toast.success(
-          `Generated ${questions.length} of ${requested} questions from your materials.`,
+        toast.message(
+          `Generated ${questions.length} of ${requested} grounded questions.`,
+          {
+            description:
+              sourceChunks != null
+                ? `Used ${sourceChunks} text section${sourceChunks === 1 ? "" : "s"} from your file. Try a broader topic, a longer document, or generate again.`
+                : "Try a broader topic or add more pages to your document.",
+          },
         );
       } else if (partial) {
         toast.success(`Generated ${questions.length} of ${requested} questions.`);
@@ -386,7 +397,7 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
               <Label htmlFor="ai-context">Additional context (optional)</Label>
               <Textarea
                 id="ai-context"
-                placeholder="Audience level, syllabus unit, avoid trick questions, etc."
+                placeholder="e.g. keep all options similar length; avoid longest answer as correct; audience level…"
                 value={additionalContext}
                 onChange={(e) => setAdditionalContext(e.target.value)}
                 maxLength={500}
@@ -426,7 +437,11 @@ export function AiQuestionGenerator({ eventId }: AiQuestionGeneratorProps) {
                   <span className="text-muted-foreground/80">
                     {" "}
                     (asked for {count}
-                    {useMaterials ? " from materials" : ""})
+                    {useMaterials ? " from materials" : ""}
+                    {lastSourceChunks != null
+                      ? ` · ${lastSourceChunks} source section${lastSourceChunks === 1 ? "" : "s"}`
+                      : ""}
+                    )
                   </span>
                 )}
               </p>

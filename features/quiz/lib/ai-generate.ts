@@ -3,7 +3,12 @@ import {
   type GenerateQuestionsInput,
   type AiGeneratedQuestion,
 } from "./validation";
-import { normalizeGeneratedQuestion } from "./ai-generate-shared";
+import {
+  acceptGeneratedQuestion,
+  buildAuthorInstructionsBlock,
+  normalizeGeneratedQuestion,
+  OPTION_FAIRNESS_RULES,
+} from "./ai-generate-shared";
 
 function buildPrompt(input: GenerateQuestionsInput): string {
   const multiSelectRules =
@@ -17,14 +22,16 @@ Topic: ${input.topic}
 Difficulty: ${input.difficulty}
 Question type: ${input.question_type}
 Default time limit per question: ${input.time_limit} seconds
-${input.additional_context ? `Additional context: ${input.additional_context}` : ""}
+${buildAuthorInstructionsBlock(input.additional_context)}
 
 Rules:
 - Each question must have exactly 4 answer options.
 - Question text must be 255 characters or fewer.
 - Option text must be 120 characters or fewer.
 - ${multiSelectRules}
+- ${OPTION_FAIRNESS_RULES}
 - Make distractors plausible for the chosen difficulty.
+- Each question must be clearly distinct; no duplicate or near-duplicate wording.
 - Do not repeat questions.
 - Return valid JSON only, no markdown.
 
@@ -70,7 +77,7 @@ export async function generateQuestionsWithAi(
         {
           role: "system",
           content:
-            "You are a quiz author for educational trivia games. Always respond with valid JSON matching the requested schema.",
+            "You are a quiz author for educational trivia games. Follow author instructions exactly. Avoid duplicate questions and avoid making the longest option the correct answer. Always respond with valid JSON matching the requested schema.",
         },
         {
           role: "user",
@@ -108,9 +115,15 @@ export async function generateQuestionsWithAi(
     throw new Error("OpenAI response did not match the expected quiz format.");
   }
 
-  const questions = validated.data.questions
-    .slice(0, input.count)
-    .map((q) => normalizeGeneratedQuestion(q, input));
+  const accepted: AiGeneratedQuestion[] = [];
+
+  for (const raw of validated.data.questions.slice(0, input.count)) {
+    const normalized = normalizeGeneratedQuestion(raw, input);
+    if (!acceptGeneratedQuestion(normalized, accepted)) continue;
+    accepted.push(normalized);
+  }
+
+  const questions = accepted;
 
   if (questions.length === 0) {
     throw new Error("No questions were generated.");

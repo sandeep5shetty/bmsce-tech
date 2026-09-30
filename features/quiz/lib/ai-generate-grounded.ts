@@ -4,14 +4,42 @@ import {
   type AiGeneratedQuestion,
   type GenerateQuestionsInput,
 } from "./validation";
-import { normalizeGeneratedQuestion } from "./ai-generate-shared";
+import {
+  acceptGeneratedQuestion,
+  buildAuthorInstructionsBlock,
+  buildCoveredConceptsBlock,
+  normalizeGeneratedQuestion,
+  OPTION_FAIRNESS_RULES,
+} from "./ai-generate-shared";
 import type { RetrievedMaterialChunk } from "./material-retrieval";
+
+const GROUNDED_BATCH_SIZE = 5;
+const MAX_GROUNDED_ATTEMPTS = 14;
+
+function pickChunksForBatch(
+  allChunks: RetrievedMaterialChunk[],
+  collected: AiGeneratedQuestion[],
+  attemptIndex: number,
+): RetrievedMaterialChunk[] {
+  const usedChunkIds = new Set(
+    collected.flatMap((q) =>
+      (q.citations ?? []).map((c) => c.chunk_id).filter(Boolean),
+    ),
+  );
+
+  const unused = allChunks.filter((c) => !usedChunkIds.has(c.chunkId));
+  const pool = unused.length >= 4 ? unused : allChunks;
+
+  const start = (attemptIndex * 6) % pool.length;
+  const rotated = [...pool.slice(start), ...pool.slice(0, start)];
+  return rotated.slice(0, Math.min(36, rotated.length));
+}
 
 function buildGroundedPrompt(
   input: GenerateQuestionsInput,
   chunks: RetrievedMaterialChunk[],
   batchCount: number,
-  existingQuestionTexts: string[],
+  existingQuestions: AiGeneratedQuestion[],
 ): string {
   const multiSelectRules =
     input.question_type === "multi_select"
@@ -36,8 +64,20 @@ excerpt: ${chunk.text}`;
     .join("\n\n");
 
   const avoidBlock =
-    existingQuestionTexts.length > 0
-      ? `\nDo NOT repeat or closely paraphrase these questions already generated:\n${existingQuestionTexts.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n`
+    existingQuestions.length > 0
+      ? `\nDo NOT repeat or closely paraphrase these questions already generated (each new question must test a different concept, API, or fact):\n${existingQuestions.map((q, i) => `${i + 1}. ${q.text}`).join("\n")}\n`
+      : "";
+
+  const conceptsBlock = buildCoveredConceptsBlock(existingQuestions);
+
+  const usedChunkIds = new Set(
+    existingQuestions.flatMap((q) =>
+      (q.citations ?? []).map((c) => c.chunk_id).filter(Boolean),
+    ),
+  );
+  const usedChunksBlock =
+    usedChunkIds.size > 0
+      ? `\nPrefer citing source chunks you have NOT used yet. Chunks already used for prior questions should not be recycled for another question about the same concept.\n`
       : "";
 
   return `Generate exactly ${batchCount} quiz multiple-choice questions using ONLY the source excerpts below.
@@ -46,19 +86,25 @@ Topic focus: ${input.topic}
 Difficulty: ${input.difficulty}
 Question type: ${input.question_type}
 Default time limit per question: ${input.time_limit} seconds
-${input.additional_context ? `Additional context: ${input.additional_context}` : ""}
+${buildAuthorInstructionsBlock(input.additional_context)}
 ${avoidBlock}
+${conceptsBlock}
+${usedChunksBlock}
 Rules:
-- Return exactly ${batchCount} questions in the JSON array when the sources support it.
+- Return exactly ${batchCount} questions in the JSON array.
 - Every question and correct answer must be directly supported by at least one source excerpt.
+- Each question must target a different concept (e.g. only ONE question about super(), only ONE about __init__, etc.).
+- Prefer unused source chunks; spread questions across the excerpts provided.
 - Each question must include at least one citation object referencing the supporting source.
-- Use chunk_id and material_id from the matching source block.
-- excerpt in citations must be a short quote copied from that source (max 300 chars).
+- Copy chunk_id and material_id exactly from the matching [SOURCE N] block (UUID strings).
+- excerpt in citations must be a short quote copied verbatim from that source (max 300 chars).
 - Do not invent facts beyond the excerpts.
 - Each question must have exactly 4 answer options.
 - Question text must be 255 characters or fewer.
 - Option text must be 120 characters or fewer.
 - ${multiSelectRules}
+- ${OPTION_FAIRNESS_RULES}
+- Each question must test a distinct fact or angle; no duplicate or near-duplicate wording.
 - Do not repeat questions.
 - Return valid JSON only, no markdown.
 
@@ -92,6 +138,71 @@ JSON shape:
 }`;
 }
 
+function findChunkForExcerpt(
+  excerpt: string,
+  materialId: string | undefined,
+  chunks: RetrievedMaterialChunk[],
+): RetrievedMaterialChunk | undefined {
+  const normalized = excerpt.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!normalized) return undefined;
+
+  const pool = materialId
+    ? chunks.filter((c) => c.materialId === materialId)
+    : chunks;
+
+  for (const len of [120, 80, 40, 20]) {
+    const needle = normalized.slice(0, len);
+    if (needle.length < 12) break;
+    const hit = pool.find((c) =>
+      c.text.toLowerCase().includes(needle),
+    );
+    if (hit) return hit;
+  }
+
+  return pool.length === 1 ? pool[0] : undefined;
+}
+
+function repairQuestionCitations(
+  question: AiGeneratedQuestion,
+  chunks: RetrievedMaterialChunk[],
+): AiGeneratedQuestion {
+  const citations = question.citations ?? [];
+  if (citations.length === 0) return question;
+
+  const chunkById = new Map(chunks.map((c) => [c.chunkId, c]));
+
+  const repaired = citations.map((citation) => {
+    const chunkId = citation.chunk_id;
+    if (chunkId) {
+      const chunk = chunkById.get(chunkId);
+      if (chunk && chunk.materialId === citation.material_id) {
+        return {
+          ...citation,
+          file_name: chunk.fileName,
+        };
+      }
+    }
+
+    const matched = findChunkForExcerpt(
+      citation.excerpt,
+      citation.material_id,
+      chunks,
+    );
+    if (!matched) return citation;
+
+    return {
+      ...citation,
+      chunk_id: matched.chunkId,
+      material_id: matched.materialId,
+      file_name: matched.fileName,
+      page_number: citation.page_number ?? matched.pageNumber ?? undefined,
+      slide_number: citation.slide_number ?? matched.slideNumber ?? undefined,
+    };
+  });
+
+  return { ...question, citations: repaired };
+}
+
 function validateCitationsForChunks(
   question: AiGeneratedQuestion,
   chunks: RetrievedMaterialChunk[],
@@ -112,15 +223,11 @@ function validateCitationsForChunks(
   });
 }
 
-function dedupeKey(text: string): string {
-  return text.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
 async function requestGroundedBatch(
   input: GenerateQuestionsInput,
   chunks: RetrievedMaterialChunk[],
   batchCount: number,
-  existingQuestionTexts: string[],
+  existingQuestions: AiGeneratedQuestion[],
 ): Promise<AiGeneratedQuestion[]> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -138,12 +245,13 @@ async function requestGroundedBatch(
     body: JSON.stringify({
       model,
       temperature: 0.2,
+      max_tokens: Math.min(8192, 900 + batchCount * 550),
       response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
           content:
-            "You are an educational quiz author. Use only provided source excerpts. Always respond with valid JSON.",
+            "You are an educational quiz author. Use only provided source excerpts. Follow author instructions exactly. Avoid duplicate questions and avoid making the longest option the correct answer. Always respond with valid JSON.",
         },
         {
           role: "user",
@@ -151,7 +259,7 @@ async function requestGroundedBatch(
             input,
             chunks,
             batchCount,
-            existingQuestionTexts,
+            existingQuestions,
           ),
         },
       ],
@@ -186,10 +294,19 @@ async function requestGroundedBatch(
     throw new Error("OpenAI response did not match the expected quiz format.");
   }
 
-  return validated.data.questions
-    .slice(0, batchCount)
-    .map((q) => normalizeGeneratedQuestion(q, input))
-    .filter((q) => validateCitationsForChunks(q, chunks));
+  const accepted: AiGeneratedQuestion[] = [];
+
+  for (const raw of validated.data.questions.slice(0, batchCount)) {
+    const normalized = normalizeGeneratedQuestion(raw, input);
+    const repaired = repairQuestionCitations(normalized, chunks);
+    if (!validateCitationsForChunks(repaired, chunks)) continue;
+    if (!acceptGeneratedQuestion(repaired, [...existingQuestions, ...accepted])) {
+      continue;
+    }
+    accepted.push(repaired);
+  }
+
+  return accepted;
 }
 
 export async function generateGroundedQuestionsWithAi(
@@ -204,24 +321,28 @@ export async function generateGroundedQuestionsWithAi(
 
   const target = input.count;
   const collected: AiGeneratedQuestion[] = [];
-  const seen = new Set<string>();
 
-  const maxAttempts = 3;
-  for (let attempt = 0; attempt < maxAttempts && collected.length < target; attempt++) {
+  let stagnantAttempts = 0;
+
+  for (
+    let attempt = 0;
+    attempt < MAX_GROUNDED_ATTEMPTS && collected.length < target;
+    attempt++
+  ) {
     const remaining = target - collected.length;
-    const batchCount = Math.min(remaining, attempt === 0 ? remaining : remaining + 2);
+    const batchCount = Math.min(remaining, GROUNDED_BATCH_SIZE);
+    const batchChunks = pickChunksForBatch(chunks, collected, attempt);
 
     const batch = await requestGroundedBatch(
       input,
-      chunks,
+      batchChunks,
       batchCount,
-      collected.map((q) => q.text),
+      collected,
     );
 
+    let added = 0;
     for (const question of batch) {
-      const key = dedupeKey(question.text);
-      if (seen.has(key)) continue;
-      seen.add(key);
+      if (!acceptGeneratedQuestion(question, collected)) continue;
       collected.push({
         ...question,
         citations: (question.citations ?? []).map((c: AiGeneratedCitation) => ({
@@ -229,10 +350,16 @@ export async function generateGroundedQuestionsWithAi(
           excerpt: c.excerpt.trim().slice(0, 500),
         })),
       });
+      added++;
       if (collected.length >= target) break;
     }
 
-    if (batch.length === 0) break;
+    if (added === 0) {
+      stagnantAttempts++;
+      if (stagnantAttempts >= 2) break;
+    } else {
+      stagnantAttempts = 0;
+    }
   }
 
   if (collected.length === 0) {

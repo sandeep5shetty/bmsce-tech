@@ -77,7 +77,18 @@ export async function retrieveMaterialChunksForTopic(params: {
     });
   }
 
-  return scored
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+  const sorted = scored.sort((a, b) => b.score - a.score);
+
+  // When the user picked specific files, send every indexed chunk from them
+  // (topic ranking only orders the prompt). Semantic top-K alone hides content
+  // and caps how many grounded questions are possible.
+  if (params.materialIds?.length) {
+    const selected = new Set(params.materialIds);
+    const fromSelection = sorted.filter((c) => selected.has(c.materialId));
+    if (fromSelection.length > 0) {
+      return fromSelection.slice(0, Math.max(limit, fromSelection.length));
+    }
+  }
+
+  return sorted.slice(0, limit);
 }
